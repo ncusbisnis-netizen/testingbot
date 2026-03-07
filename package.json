@@ -1,17 +1,11 @@
 {
-  "name": "wa-bot-session",
-  "version": "1.0.0",
-  "description": "Bot WhatsApp pake session ID",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "whatsapp-web.js": "^1.19.4",
-    "express": "^4.18.2",
-    "puppeteer": "19.11.1"
-  },
-  "engines": {
-    "node": "18.20.8"
-  }
+"name": "wa-bot",
+"version": "1.0.0",
+"main": "index.js",
+"scripts": {
+"start": "node index.js"
+},
+"dependencies": {
+"@whiskeysockets/baileys": "^6.7.5"
+}
 }
