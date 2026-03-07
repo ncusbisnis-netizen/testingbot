@@ -56,13 +56,15 @@ async function checkGroupAccess(msg) {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
-    // Jika chat pribadi, hanya admin yang bisa akses
-    if (msg.chat.type === 'private') {
-        if (!isAdmin(userId)) {
-            await bot.sendMessage(chatId, '❌ Maaf, bot ini hanya untuk admin.');
-            return false;
-        }
+    // Admin bot bisa akses di mana saja
+    if (isAdmin(userId)) {
         return true;
+    }
+    
+    // Jika chat pribadi, non-admin tidak bisa akses
+    if (msg.chat.type === 'private') {
+        await bot.sendMessage(chatId, '❌ Maaf, bot ini hanya untuk admin.');
+        return false;
     }
     
     // Jika di grup, cek apakah grup diizinkan
@@ -106,8 +108,10 @@ bot.onText(/\/help/, async (msg) => {
         '*Untuk Semua Member Grup:*\n' +
         '• /start - Mulai bot\n' +
         '• /help - Tampilkan bantuan\n\n' +
-        '*Khusus Admin Bot (Private Chat):*\n' +
-        '• `/idgrup @username` - Lihat ID grup\n' +
+        '*Khusus Admin Bot (Bisa di Grup atau Private Chat):*\n' +
+        '• `/idgrup @username` - Lihat ID grup public\n' +
+        '• `/idgrup https://t.me/+kode` - Lihat ID via link\n' +
+        '• *Reply pesan* dengan `/idgrup` - Untuk grup private\n' +
         '• `/addakses ID_GRUP` - Tambah akses grup\n' +
         '• `/removeakses ID_GRUP` - Hapus akses grup\n' +
         '• `/listakses` - Lihat semua grup terdaftar\n' +
@@ -116,16 +120,27 @@ bot.onText(/\/help/, async (msg) => {
     await bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
 });
 
-// Command /idgrup [username/link/reply] - KHUSUS ADMIN
+// Command /idgrup [username/link/reply] - KHUSUS ADMIN BOT (bisa di grup)
 bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
     
-    // Hanya admin yang bisa akses di private chat
-    if (msg.chat.type !== 'private' || !isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin di private chat.');
+    // ============= CEK AKSES =============
+    
+    // Cek apakah user adalah ADMIN BOT
+    if (!isAdmin(userId)) {
+        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk ADMIN BOT!');
         return;
     }
+    
+    // Kalau di GRUP, pastikan grup sudah terdaftar
+    if (isGroup && !isGroupAllowed(chatId)) {
+        await bot.sendMessage(chatId, '❌ Grup ini belum terdaftar. Gunakan /addakses dulu di private chat.');
+        return;
+    }
+    
+    // ============= PROSES COMMAND =============
     
     // CEK APAKAH REPLY KE PESAN DARI GRUP
     if (msg.reply_to_message) {
@@ -172,9 +187,46 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
     }
     
     // JIKA TIDAK REPLY, CEK APAKAH ADA PARAMETER
-    const param = match[1];
+    const param = match?.[1];
     
     if (!param) {
+        // Kalau di grup dan tanpa parameter, cek grup ini sendiri
+        if (isGroup) {
+            const loadingMsg = await bot.sendMessage(chatId, '🔍 Mengambil informasi grup ini...');
+            
+            try {
+                const chat = msg.chat;
+                
+                // Dapatkan jumlah member
+                let memberCount = 'Tidak diketahui';
+                try {
+                    memberCount = await bot.getChatMembersCount(chat.id);
+                } catch (e) {}
+                
+                const infoText = 
+                    `📊 *INFORMASI GRUP INI*\n` +
+                    `==================\n\n` +
+                    `📌 *Nama Grup:* ${chat.title}\n` +
+                    `🆔 *ID Grup:* \`${chat.id}\`\n` +
+                    `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
+                    `👥 *Total Member:* ${memberCount}\n` +
+                    `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
+                    `🌐 *Username:* ${chat.username ? '@' + chat.username : 'Tidak ada (private)'}\n` +
+                    `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
+                    `✅ *Grup ini sudah terdaftar!*`;
+                
+                await bot.deleteMessage(chatId, loadingMsg.message_id);
+                await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
+                return;
+                
+            } catch (error) {
+                await bot.deleteMessage(chatId, loadingMsg.message_id);
+                await bot.sendMessage(chatId, '❌ Gagal mengambil info grup.');
+                return;
+            }
+        }
+        
+        // Kalau di private chat tanpa parameter, tampilkan panduan
         await bot.sendMessage(chatId,
             '❌ *Format salah!*\n\n' +
             '*3 Cara Menggunakan /idgrup:*\n\n' +
@@ -187,7 +239,7 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
             '3️⃣ *Via Reply:*\n' +
             '   Reply pesan dari grup dengan `/idgrup`\n\n' +
             '📌 *Tips:*\n' +
-            '• Untuk grup private, gunakan link atau reply',
+            '• Di grup, admin bisa ketik `/idgrup` saja untuk lihat ID grup ini',
             { parse_mode: 'Markdown' }
         );
         return;
@@ -242,8 +294,6 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
             
             // Coba resolve invite link
             try {
-                // Kita perlu bot yang sudah join ke grup untuk bisa resolve invite link
-                // Cara alternatif: minta user forward pesan dari grup
                 await bot.deleteMessage(chatId, loadingMsg.message_id);
                 await bot.sendMessage(chatId,
                     `⚠️ *Untuk grup private dengan link undangan:*\n\n` +
@@ -340,13 +390,59 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
     }
 });
 
+// Command /addakses - Tambah grup ke whitelist
+bot.onText(/\/addakses (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    // Hanya admin yang bisa
+    if (!isAdmin(userId)) {
+        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
+        return;
+    }
+    
+    const groupId = parseInt(match[1]);
+    
+    if (isNaN(groupId)) {
+        await bot.sendMessage(chatId, '❌ ID grup harus berupa angka!');
+        return;
+    }
+    
+    // Tambahkan ke daftar
+    allowedGroups.add(groupId);
+    saveAllowedGroups(allowedGroups);
+    
+    // Coba dapatkan info grup
+    try {
+        const chat = await bot.getChat(groupId);
+        await bot.sendMessage(chatId,
+            `✅ *GRUP DITAMBAHKAN*\n\n` +
+            `📌 Nama: ${chat.title}\n` +
+            `🆔 ID: \`${groupId}\`\n` +
+            `📊 Total grup terdaftar: ${allowedGroups.size}`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch {
+        await bot.sendMessage(chatId,
+            `✅ *GRUP DITAMBAHKAN*\n\n` +
+            `🆔 ID: \`${groupId}\`\n` +
+            `📊 Total grup terdaftar: ${allowedGroups.size}\n\n` +
+            `⚠️ Bot belum diundang ke grup ini.`,
+            { parse_mode: 'Markdown' }
+        );
+    }
+});
+
 // Command /removeakses - Hapus grup dari whitelist
 bot.onText(/\/removeakses (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
-    // Hanya admin di private chat
-    if (msg.chat.type !== 'private' || !isAdmin(userId)) return;
+    // Hanya admin yang bisa
+    if (!isAdmin(userId)) {
+        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
+        return;
+    }
     
     const groupId = parseInt(match[1]);
     
@@ -375,8 +471,11 @@ bot.onText(/\/listakses/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
-    // Hanya admin di private chat
-    if (msg.chat.type !== 'private' || !isAdmin(userId)) return;
+    // Hanya admin yang bisa
+    if (!isAdmin(userId)) {
+        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
+        return;
+    }
     
     if (allowedGroups.size === 0) {
         await bot.sendMessage(chatId, '📋 Belum ada grup yang terdaftar.');
@@ -414,7 +513,11 @@ bot.onText(/\/status/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
-    if (msg.chat.type !== 'private' || !isAdmin(userId)) return;
+    // Hanya admin yang bisa
+    if (!isAdmin(userId)) {
+        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
+        return;
+    }
     
     const status = 
         `📊 *STATUS BOT*\n\n` +
