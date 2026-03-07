@@ -1,37 +1,33 @@
-const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys")
-const { BufferJSON } = require("@whiskeysockets/baileys")
-const fs = require("fs")
-
-const SESSION = process.env.SESSION_ID
-
-if (!fs.existsSync("./session.json")) {
-    const buff = Buffer.from(SESSION, "base64")
-    fs.writeFileSync("./session.json", buff.toString())
-}
-
-const { state, saveState } = useSingleFileAuthState("./session.json")
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
 
 async function startBot() {
 
-    const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false
-    })
+const { state, saveCreds } = await useMultiFileAuthState("session")
 
-    sock.ev.on("creds.update", saveState)
+const sock = makeWASocket({
+auth: state,
+printQRInTerminal: true
+})
 
-    sock.ev.on("messages.upsert", async ({ messages }) => {
+sock.ev.on("creds.update", saveCreds)
 
-        const msg = messages[0]
-        if (!msg.message) return
+sock.ev.on("messages.upsert", async ({ messages }) => {
 
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text
+const msg = messages[0]
+if (!msg.message) return
 
-        if (text === "ping") {
-            await sock.sendMessage(msg.key.remoteJid, { text: "pong" })
-        }
+const sender = msg.key.remoteJid
+const text =
+msg.message.conversation ||
+msg.message.extendedTextMessage?.text
 
-    })
+if (!text) return
+
+if (text === "ping") {
+await sock.sendMessage(sender, { text: "pong" })
+}
+
+})
 
 }
 
