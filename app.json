@@ -1,24 +1,15 @@
 {
-  "name": "WhatsApp Bot Heroku",
-  "description": "Bot WhatsApp untuk Heroku dengan session permanen",
-  "repository": "https://github.com/YOUR_USERNAME/YOUR_REPO",
-  "logo": "https://whatsapp.com/favicon.ico",
-  "keywords": ["whatsapp", "bot", "heroku", "whatsapp-web"],
+  "name": "WA Bot Session",
+  "description": "Bot WhatsApp dengan session permanen",
   "env": {
     "PREFIX": {
-      "description": "Prefix untuk command (contoh: !, /, .)",
-      "value": "!",
-      "required": true
+      "value": "!"
     },
     "OWNER_NUMBER": {
-      "description": "Nomor WhatsApp owner (format 628xxx, tanpa + atau spasi)",
-      "value": "628123456789",
-      "required": true
+      "value": "6283133199990"
     },
     "SESSION_NAME": {
-      "description": "Nama session (bebas, untuk menyimpan login)",
-      "value": "heroku-session",
-      "required": false
+      "value": "whatsapp-session"
     }
   },
   "buildpacks": [
@@ -28,11 +19,5 @@
     {
       "url": "https://github.com/jontewks/puppeteer-heroku-buildpack"
     }
-  ],
-  "formation": {
-    "web": {
-      "quantity": 1,
-      "size": "eco"
-    }
-  }
+  ]
 }
