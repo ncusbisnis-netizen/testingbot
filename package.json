@@ -1,19 +1,8 @@
 {
-  "name": "testingbot",
+  "name": "wa-bot",
   "version": "1.0.0",
-  "description": "Bot WhatsApp",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome"
-  },
   "dependencies": {
-    "whatsapp-web.js": "^1.25.0",
-    "express": "^4.18.2",
-    "qrcode-terminal": "^0.12.0",
-    "puppeteer": "^21.9.0"
-  },
-  "engines": {
-    "node": "18.x"
+    "@whiskeysockets/baileys": "^6.7.0"
   }
 }
