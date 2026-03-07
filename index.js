@@ -17,6 +17,7 @@ const client = new Client({
     session: sessionData,
     puppeteer: {
         headless: true,
+        executablePath: '/app/.apt/usr/bin/google-chrome', // <--- INI PENTING!
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
