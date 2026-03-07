@@ -1,185 +1,237 @@
+// ========== WHATSAPP BOT SEDERHANA ==========
+// Tanpa API Key, hanya fitur dasar
+// Session ID tersimpan otomatis
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
-const axios = require('axios');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ========== KONFIGURASI ==========
-const PREFIX = '!'; // Prefix command
-const OWNER_NUMBER = process.env.OWNER_NUMBER || '628xxxxxx'; // Set di Heroku
+// ========== KONFIGURASI DARI ENV ==========
+const PREFIX = process.env.PREFIX || '!';
+const OWNER_NUMBER = process.env.OWNER_NUMBER || '628123456789';
+const SESSION_NAME = process.env.SESSION_NAME || 'whatsapp-bot-session';
+const BOT_NAME = process.env.BOT_NAME || 'SimpleBot';
 
 // ========== INISIALISASI CLIENT ==========
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: 'heroku-session' // Session akan tersimpan
+        clientId: SESSION_NAME
     }),
     puppeteer: {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
             '--disable-gpu',
             '--headless=new'
         ]
     }
 });
 
-// ========== QR CODE UNTUK SCAN ==========
+// ========== CEK SESSION ==========
+const sessionPath = `./.wwebjs_auth/${SESSION_NAME}`;
+if (fs.existsSync(sessionPath)) {
+    console.log('✅ Session ID ditemukan!');
+} else {
+    console.log('📱 Session baru, scan QR sekali saja');
+}
+
+// ========== EVENT QR ==========
 client.on('qr', (qr) => {
-    console.log('\n📱 SCAN QR CODE INI DENGAN WHATSAPP ANDA:');
-    console.log('='.repeat(50));
+    console.log('\n📱 SCAN QR INI:');
+    console.log('='.repeat(40));
     qrcode.generate(qr, { small: true });
-    console.log('='.repeat(50));
-    console.log('⏱️ QR Code akan expired dalam 60 detik');
+    console.log('='.repeat(40));
 });
 
-// ========== BOT SIAP ==========
+// ========== EVENT READY ==========
 client.on('ready', () => {
-    console.log('\n✅ BOT WHATSAPP SIAP DIGUNAKAN!');
-    console.log(`📱 Nomor Bot: ${client.info.wid.user}`);
+    console.log('\n✅ BOT SIAP!');
+    console.log(`📱 Nomor: ${client.info.wid.user}`);
+    console.log(`🔐 Session: ${SESSION_NAME}`);
     console.log(`⚡ Prefix: ${PREFIX}`);
     console.log(`👑 Owner: ${OWNER_NUMBER}`);
 });
 
-// ========== AUTHENTICATED ==========
-client.on('authenticated', () => {
-    console.log('🔐 Session tersimpan!');
-});
-
-// ========== DISCONNECTED ==========
+// ========== EVENT DISCONNECTED ==========
 client.on('disconnected', (reason) => {
-    console.log('❌ BOT TERPUTUS:', reason);
-    console.log('🔄 Mencoba reconnect...');
+    console.log('❌ Putus:', reason);
     setTimeout(() => client.initialize(), 10000);
 });
+
+// ========== FORMAT NOMOR ==========
+function formatNumber(number) {
+    return number.split('@')[0];
+}
+
+// ========== CEK OWNER ==========
+function isOwner(number) {
+    return formatNumber(number) === OWNER_NUMBER;
+}
 
 // ========== HANDLER PESAN ==========
 client.on('message', async (msg) => {
     try {
-        // Abaikan pesan dari group (opsional)
-        if (msg.from.endsWith('@g.us')) return;
-        
-        // Abaikan status/story
+        // Abaikan status
         if (msg.from === 'status@broadcast') return;
         
-        const sender = msg.from.split('@')[0];
+        const chat = await msg.getChat();
+        const sender = msg.from;
+        const senderNumber = formatNumber(sender);
         const message = msg.body;
+        const isGroup = chat.isGroup;
         
-        // Cek apakah pesan diawali prefix
+        // Log pesan
+        if (isGroup) {
+            console.log(`👥 [GRUP] ${chat.name}: ${message}`);
+        } else {
+            console.log(`👤 ${senderNumber}: ${message}`);
+        }
+        
+        // Cek prefix
         if (!message.startsWith(PREFIX)) return;
         
-        // Parse command
         const args = message.slice(PREFIX.length).trim().split(/ +/);
         const command = args.shift().toLowerCase();
         
-        console.log(`📨 Command: ${command} dari ${sender}`);
+        // ========== COMMAND UMUM ==========
         
-        // ========== COMMAND: !menu ==========
-        if (command === 'menu' || command === 'help') {
-            const menu = `╔══════════════════╗
-║   *BOT MENU*    
-╚══════════════════╝
-
-┌ *!menu* - Tampilkan menu
-├ *!ping* - Cek respon bot
-├ *!info* - Info bot
-├ *!time* - Jam sekarang
-├ *!sticker* - Buat sticker
-├ *!say* [teks] - Bot ngomong
-└ *!owner* - Kontak owner
-
-_Bot by @${OWNER_NUMBER}_`;
+        // !menu
+        if (command === 'menu') {
+            let menu = `*${BOT_NAME}*\n\n`;
+            menu += `┌ *!menu* - Menu ini\n`;
+            menu += `├ *!ping* - Cek bot\n`;
+            menu += `├ *!info* - Info bot\n`;
+            
+            if (isGroup) {
+                menu += `├ *!idgrup* - ID grup ini\n`;
+            }
+            
+            menu += `├ *!say* [teks] - Bot ngomong\n`;
+            menu += `└ *!owner* - Kontak owner\n\n`;
+            menu += `Prefix: ${PREFIX}`;
             
             await msg.reply(menu);
         }
         
-        // ========== COMMAND: !ping ==========
+        // !ping
         else if (command === 'ping') {
-            const start = Date.now();
-            await msg.reply('🏓 *Pong!*');
-            const end = Date.now();
-            await msg.reply(`⏱️ *${end - start}ms*`);
+            await msg.reply('🏓 Pong!');
         }
         
-        // ========== COMMAND: !info ==========
+        // !info
         else if (command === 'info') {
-            const info = `*📱 INFORMASI BOT*
-            
-├ Nama: Simple WhatsApp Bot
-├ Versi: 1.0.0
-├ Prefix: ${PREFIX}
-├ Platform: Heroku
-├ Owner: ${OWNER_NUMBER}
-└ Status: 🟢 Online`;
+            const info = `*INFO BOT*\n\n` +
+                `Nama: ${BOT_NAME}\n` +
+                `Prefix: ${PREFIX}\n` +
+                `Owner: ${OWNER_NUMBER}\n` +
+                `Session: ${SESSION_NAME}\n` +
+                `Status: 🟢 Online`;
             
             await msg.reply(info);
         }
         
-        // ========== COMMAND: !time ==========
-        else if (command === 'time') {
-            const now = new Date();
-            const waktu = now.toLocaleString('id-ID', {
-                timeZone: 'Asia/Jakarta',
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            
-            await msg.reply(`🕐 *${waktu} WIB*`);
-        }
-        
-        // ========== COMMAND: !say ==========
+        // !say
         else if (command === 'say') {
             if (args.length === 0) {
-                await msg.reply('Contoh: !say Halo semua');
+                await msg.reply(`Contoh: ${PREFIX}say Halo`);
                 return;
             }
             await msg.reply(args.join(' '));
         }
         
-        // ========== COMMAND: !sticker ==========
-        else if (command === 'sticker' || command === 'stiker') {
-            if (msg.hasMedia) {
-                const media = await msg.downloadMedia();
-                if (media) {
-                    await msg.reply(media, undefined, {
-                        sendMediaAsSticker: true,
-                        stickerName: 'Bot Sticker',
-                        stickerAuthor: `@${OWNER_NUMBER}`
-                    });
-                } else {
-                    await msg.reply('❌ Gagal download media');
-                }
-            } else {
-                await msg.reply('📸 Kirim gambar dengan caption !sticker');
-            }
-        }
-        
-        // ========== COMMAND: !owner ==========
+        // !owner
         else if (command === 'owner') {
             await msg.reply(`👑 Owner: @${OWNER_NUMBER}`);
         }
         
+        // ========== COMMAND GRUP ==========
+        
+        // !idgrup (khusus grup)
+        else if (command === 'idgrup' || command === 'idgroup') {
+            if (!isGroup) {
+                await msg.reply('❌ Perintah ini hanya untuk grup!');
+                return;
+            }
+            
+            const response = `📊 *ID GRUP*\n\n` +
+                `Nama: ${chat.name}\n` +
+                `ID: \`${chat.id._serialized}\`\n` +
+                `Member: ${chat.participants.length}`;
+            
+            await msg.reply(response);
+        }
+        
+        // !infogrup (khusus grup)
+        else if (command === 'infogrup' || command === 'infogroup') {
+            if (!isGroup) {
+                await msg.reply('❌ Perintah ini hanya untuk grup!');
+                return;
+            }
+            
+            const admins = chat.participants.filter(p => p.isAdmin || p.isSuperAdmin);
+            
+            const response = `ℹ️ *INFO GRUP*\n\n` +
+                `Nama: ${chat.name}\n` +
+                `ID: \`${chat.id._serialized}\`\n` +
+                `Member: ${chat.participants.length}\n` +
+                `Admin: ${admins.length}\n` +
+                `Dibuat: ${chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : '-'}`;
+            
+            await msg.reply(response);
+        }
+        
+        // ========== COMMAND OWNER ==========
+        
+        // !restart (khusus owner)
+        else if (command === 'restart') {
+            if (!isOwner(sender)) {
+                await msg.reply('❌ Hanya owner!');
+                return;
+            }
+            
+            await msg.reply('🔄 Restart bot...');
+            console.log('🔄 Restart oleh owner');
+            process.exit(0);
+        }
+        
+        // !session (khusus owner)
+        else if (command === 'session') {
+            if (!isOwner(sender)) {
+                await msg.reply('❌ Hanya owner!');
+                return;
+            }
+            
+            const sessionExist = fs.existsSync(sessionPath);
+            const files = sessionExist ? fs.readdirSync(sessionPath) : [];
+            
+            const response = `🔐 *SESSION INFO*\n\n` +
+                `Nama: ${SESSION_NAME}\n` +
+                `Lokasi: ${sessionPath}\n` +
+                `Status: ${sessionExist ? '✅ Ada' : '❌ Tidak ada'}\n` +
+                `File: ${files.length} file`;
+            
+            await msg.reply(response);
+        }
+        
     } catch (error) {
         console.log('Error:', error.message);
-        await msg.reply('❌ Terjadi kesalahan');
+        await msg.reply('❌ Error, coba lagi');
     }
 });
 
-// ========== EXPRESS SERVER ==========
+// ========== WEB SERVER ==========
 app.get('/', (req, res) => {
     res.send(`
-        <h1>🤖 WhatsApp Bot Active</h1>
+        <h1>${BOT_NAME}</h1>
         <p>Status: 🟢 Online</p>
         <p>Nomor: ${client.info ? client.info.wid.user : 'Belum login'}</p>
-        <p>Scan QR di console Heroku untuk login</p>
+        <p>Session: ${fs.existsSync(sessionPath) ? '✅' : '❌'}</p>
+        <p>Prefix: ${PREFIX}</p>
     `);
 });
 
@@ -187,14 +239,17 @@ app.get('/status', (req, res) => {
     res.json({
         status: 'online',
         bot: client.info ? 'connected' : 'disconnected',
-        number: client.info ? client.info.wid.user : null
+        number: client.info ? client.info.wid.user : null,
+        session: fs.existsSync(sessionPath),
+        prefix: PREFIX,
+        owner: OWNER_NUMBER
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`🌐 Server web di port ${PORT}`);
+    console.log(`🌐 Web: http://localhost:${PORT}`);
 });
 
-// ========== START BOT ==========
-console.log('🚀 Memulai Bot WhatsApp...');
+// ========== START ==========
+console.log('🚀 Starting bot...');
 client.initialize();
