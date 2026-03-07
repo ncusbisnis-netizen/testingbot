@@ -1,6 +1,7 @@
 {
   "name": "wa-bot-session",
   "version": "1.0.0",
+  "description": "Bot WhatsApp dengan Session ID",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -8,5 +9,9 @@
   "dependencies": {
     "whatsapp-web.js": "^1.19.4",
     "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "18.20.8",
+    "npm": "10.8.2"
   }
 }
