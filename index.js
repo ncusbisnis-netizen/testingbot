@@ -1,59 +1,38 @@
-const { Client } = require('whatsapp-web.js');
-const express = require('express');
-const qrcode = require('qrcode-terminal');
+const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys")
+const { BufferJSON } = require("@whiskeysockets/baileys")
+const fs = require("fs")
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const SESSION = process.env.SESSION_ID
 
-console.log('🚀 ========== BOT WHATSAPP ==========');
-console.log('📱 Menyiapkan bot...');
+if (!fs.existsSync("./session.json")) {
+    const buff = Buffer.from(SESSION, "base64")
+    fs.writeFileSync("./session.json", buff.toString())
+}
 
-// PAKAI INI DULU - HAPUS SESSION ID
-const client = new Client({
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu'
-        ]
-    }
-});
+const { state, saveState } = useSingleFileAuthState("./session.json")
 
-// QR CODE
-client.on('qr', (qr) => {
-    console.log('\n📱 SCAN QR INI:');
-    qrcode.generate(qr, { small: true });
-    console.log('⏱️ Scan dalam 60 detik');
-});
+async function startBot() {
 
-// READY
-client.on('ready', () => {
-    console.log('✅ ========== BOT SIAP! ==========');
-    console.log('📱 Nomor Bot:', client.info.wid.user);
-});
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false
+    })
 
-// AUTHENTICATED
-client.on('authenticated', (session) => {
-    console.log('✅ Session baru didapat!');
-    console.log('📝 COPY INI BUAT DISIMPAN:');
-    console.log(JSON.stringify(session));
-});
+    sock.ev.on("creds.update", saveState)
 
-// PESAN
-client.on('message', async (msg) => {
-    if (msg.body === '!ping') {
-        await msg.reply('🏓 Pong!');
-    }
-});
+    sock.ev.on("messages.upsert", async ({ messages }) => {
 
-app.get('/', (req, res) => {
-    res.send('Bot WhatsApp Jalan!');
-});
+        const msg = messages[0]
+        if (!msg.message) return
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log('🌐 Web server: http://localhost:' + PORT);
-});
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text
 
-client.initialize();
+        if (text === "ping") {
+            await sock.sendMessage(msg.key.remoteJid, { text: "pong" })
+        }
+
+    })
+
+}
+
+startBot()
