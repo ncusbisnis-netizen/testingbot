@@ -1,15 +1,13 @@
 {
-  "name": "wa-bot-session",
+  "name": "bot-wa",
   "version": "1.0.0",
+  "description": "Bot WhatsApp",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "whatsapp-web.js": "^1.25.0",
+    "whatsapp-web.js": "^1.19.4",
     "express": "^4.18.2"
-  },
-  "engines": {
-    "node": "18.20.8"
   }
 }
