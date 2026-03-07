@@ -1,6 +1,5 @@
 const { Client } = require('whatsapp-web.js');
 const express = require('express');
-const { execSync } = require('child_process');
 const fs = require('fs');
 
 const app = express();
@@ -14,37 +13,30 @@ const sessionData = {
     WAToken2: "qGXb7JvhYopx2tTLHheDp7W8X5YhK5ZVnKdHjNhLj2o="
 };
 
-// CARI CHROME
-function findChrome() {
-    try {
-        const result = execSync('which google-chrome-stable || which google-chrome || which chromium || echo notfound').toString().trim();
-        if (result && result !== 'notfound') return result;
-    } catch (e) {}
-    
-    const paths = [
-        '/app/.apt/usr/bin/google-chrome',
-        '/app/.apt/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser'
-    ];
-    
-    for (const path of paths) {
-        if (fs.existsSync(path)) return path;
-    }
-    return null;
+// PATH CHROME YANG SUDAH PASTI
+const CHROME_PATH = '/app/.apt/opt/google/chrome/chrome';
+
+// CEK APAKAH FILE ADA
+if (fs.existsSync(CHROME_PATH)) {
+    console.log('✅ Chrome ditemukan di:', CHROME_PATH);
+} else {
+    console.log('❌ Chrome TIDAK ditemukan di:', CHROME_PATH);
 }
 
-const chromePath = findChrome();
-console.log('🔍 Chrome path:', chromePath);
-
+// INIT BOT
 const client = new Client({
     session: sessionData,
     puppeteer: {
         headless: true,
-        executablePath: chromePath,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        executablePath: CHROME_PATH,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote'
+        ]
     }
 });
 
@@ -54,10 +46,13 @@ client.on('ready', () => {
 });
 
 client.on('message', msg => {
-    if (msg.body === '!ping') msg.reply('pong');
+    console.log('📨 Pesan:', msg.body);
+    if (msg.body === '!ping') {
+        msg.reply('pong');
+    }
 });
 
-app.get('/', (req, res) => res.send('Bot Jalan'));
+app.get('/', (req, res) => res.send('Bot WhatsApp Jalan!'));
 app.listen(PORT, '0.0.0.0', () => console.log('🌐 Web:', PORT));
 
 client.initialize();
