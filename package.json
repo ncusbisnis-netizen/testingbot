@@ -1,20 +1,15 @@
 {
-  "name": "wa-bot-heroku",
+  "name": "wa-bot-session",
   "version": "1.0.0",
-  "description": "Bot WhatsApp untuk Heroku - Fix Puppeteer",
+  "description": "Bot WhatsApp dengan session ID",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "apt-get update && apt-get install -y wget gnupg && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' >> /etc/apt/sources.list.d/google.list && apt-get update && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 --no-install-recommends && rm -rf /var/lib/apt/lists/*"
+    "start": "node index.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",
     "qrcode-terminal": "^0.12.0",
     "express": "^4.18.2",
     "puppeteer": "^21.6.0"
-  },
-  "engines": {
-    "node": "18.x",
-    "npm": "9.x"
   }
 }
