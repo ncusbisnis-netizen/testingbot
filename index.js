@@ -1,5 +1,6 @@
 const { Client } = require('whatsapp-web.js');
 const express = require('express');
+const { execSync } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,36 +13,88 @@ const sessionData = {
     WAToken2: "qGXb7JvhYopx2tTLHheDp7W8X5YhK5ZVnKdHjNhLj2o="
 };
 
-// ========== INIT BOT - TANPA EXECUTABLE PATH ==========
+// ========== CARI CHROME OTOMATIS ==========
+function findChrome() {
+    try {
+        // Coba pake whereis/google-chrome
+        const result = execSync('which google-chrome-stable || which google-chrome || which chromium || echo notfound').toString().trim();
+        if (result && result !== 'notfound') {
+            console.log('✅ Chrome ditemukan di: ' + result);
+            return result;
+        }
+    } catch (e) {
+        console.log('❌ Chrome gak ketemu, pake fallback');
+    }
+    
+    // Fallback paths buat Heroku
+    const paths = [
+        '/app/.apt/usr/bin/google-chrome',
+        '/app/.apt/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser'
+    ];
+    
+    const fs = require('fs');
+    for (const path of paths) {
+        if (fs.existsSync(path)) {
+            console.log('✅ Chrome fallback di: ' + path);
+            return path;
+        }
+    }
+    
+    return null;
+}
+
+const chromePath = findChrome();
+console.log('🚀 Chrome path: ' + chromePath);
+
+// ========== INIT BOT ==========
 const client = new Client({
     session: sessionData,
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-        // executablePath: - HAPUS BARIS INI!
+        executablePath: chromePath,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--window-size=1920x1080'
+        ]
     }
 });
 
 client.on('ready', () => {
-    console.log('✅ BOT SIAP PAKE SESSION ID!');
+    console.log('✅ BOT SIAP!');
     console.log('📱 Nomor: ' + client.info.wid.user);
 });
 
 client.on('message', async (msg) => {
+    console.log(`📨 Pesan: ${msg.body}`);
+    
     if (msg.body === '!ping') {
-        await msg.reply('pong');
+        await msg.reply('🏓 pong');
     }
+    
+    if (msg.body === '!info') {
+        await msg.reply(`Bot aktif di ${client.info.wid.user}`);
+    }
+    
     if (msg.body === '!idgrup' && msg.isGroup) {
-        await msg.reply('ID Grup: ' + msg.from);
+        await msg.reply(`ID Grup: ${msg.from}`);
     }
 });
 
 app.get('/', (req, res) => {
-    res.send('Bot Jalan Pake Session ID');
+    res.send('✅ Bot WhatsApp Jalan!');
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log('🌐 Web: ' + PORT);
+    console.log('🌐 Web: http://localhost:' + PORT);
 });
 
+console.log('🚀 Starting bot...');
 client.initialize();
