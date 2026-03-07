@@ -1,14 +1,16 @@
 {
-  "name": "telegram-bot-js",
+  "name": "whatsapp-bot-sederhana",
   "version": "1.0.0",
-  "description": "Telegram Bot dengan sistem whitelist grup",
+  "description": "Bot WhatsApp sederhana untuk Heroku",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.64.0",
-    "express": "^4.18.2"
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "express": "^4.18.2",
+    "axios": "^1.6.0"
   },
   "engines": {
     "node": "18.x"
