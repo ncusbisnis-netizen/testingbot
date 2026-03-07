@@ -109,6 +109,7 @@ bot.onText(/\/help/, async (msg) => {
         '• /start - Mulai bot\n' +
         '• /help - Tampilkan bantuan\n\n' +
         '*Khusus Admin Bot (Bisa di Grup atau Private Chat):*\n' +
+        '• `/idgrup` - Lihat ID grup ini (ketik di grup)\n' +
         '• `/idgrup @username` - Lihat ID grup public\n' +
         '• `/idgrup https://t.me/+kode` - Lihat ID via link\n' +
         '• *Reply pesan* dengan `/idgrup` - Untuk grup private\n' +
@@ -120,7 +121,7 @@ bot.onText(/\/help/, async (msg) => {
     await bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
 });
 
-// Command /idgrup [username/link/reply] - KHUSUS ADMIN BOT (bisa di grup)
+// Command /idgrup - KHUSUS ADMIN BOT (VERSION FINAL - MUDAH!)
 bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -128,19 +129,43 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
     
     // ============= CEK AKSES =============
     
-    // Cek apakah user adalah ADMIN BOT
+    // Hanya admin bot yang bisa
     if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk ADMIN BOT!');
-        return;
+        return bot.sendMessage(chatId, '❌ Perintah ini hanya untuk ADMIN BOT!');
     }
     
-    // Kalau di GRUP, pastikan grup sudah terdaftar
-    if (isGroup && !isGroupAllowed(chatId)) {
-        await bot.sendMessage(chatId, '❌ Grup ini belum terdaftar. Gunakan /addakses dulu di private chat.');
-        return;
+    // ============= KALAU DI GRUP =============
+    if (isGroup) {
+        // Cek apakah grup sudah terdaftar
+        if (!isGroupAllowed(chatId)) {
+            return bot.sendMessage(chatId, '❌ Grup ini belum terdaftar. Tambah dulu dengan /addakses di private chat.');
+        }
+        
+        // TAMPILKAN ID GRUP INI!
+        const chat = msg.chat;
+        
+        // Ambil jumlah member
+        let memberCount = 'Tidak diketahui';
+        try {
+            memberCount = await bot.getChatMembersCount(chatId);
+        } catch (e) {}
+        
+        const infoText = 
+            `📊 *INFORMASI GRUP INI*\n` +
+            `==================\n\n` +
+            `📌 *Nama Grup:* ${chat.title}\n` +
+            `🆔 *ID Grup:* \`${chatId}\`\n` +
+            `👥 *Total Member:* ${memberCount}\n` +
+            `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
+            `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
+            `🌐 *Username:* ${chat.username ? '@' + chat.username : 'Tidak ada (private)'}\n` +
+            `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
+            `✅ *Grup ini sudah terdaftar!*`;
+        
+        return bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
     }
     
-    // ============= PROSES COMMAND =============
+    // ============= KALAU DI PRIVATE CHAT =============
     
     // CEK APAKAH REPLY KE PESAN DARI GRUP
     if (msg.reply_to_message) {
@@ -164,8 +189,8 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
                     `==================\n\n` +
                     `📌 *Nama Grup:* ${chat.title}\n` +
                     `🆔 *ID Grup:* \`${chat.id}\`\n` +
-                    `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
                     `👥 *Total Member:* ${memberCount}\n` +
+                    `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
                     `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
                     `🌐 *Username:* ${chat.username ? '@' + chat.username : 'Tidak ada (private)'}\n` +
                     `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
@@ -174,80 +199,33 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
                     `• Hapus akses: \`/removeakses ${chat.id}\``;
                 
                 await bot.deleteMessage(chatId, loadingMsg.message_id);
-                await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
+                return bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
                 
-                console.log(`Admin ${userId} cek grup via reply: ${chat.id}`);
-                return;
             } catch (error) {
                 await bot.deleteMessage(chatId, loadingMsg.message_id);
-                await bot.sendMessage(chatId, '❌ Gagal memproses pesan reply.');
-                return;
+                return bot.sendMessage(chatId, '❌ Gagal memproses pesan reply.');
             }
         }
     }
     
-    // JIKA TIDAK REPLY, CEK APAKAH ADA PARAMETER
+    // CEK APAKAH ADA PARAMETER (USERNAME ATAU LINK)
     const param = match?.[1];
     
     if (!param) {
-        // Kalau di grup dan tanpa parameter, cek grup ini sendiri
-        if (isGroup) {
-            const loadingMsg = await bot.sendMessage(chatId, '🔍 Mengambil informasi grup ini...');
-            
-            try {
-                const chat = msg.chat;
-                
-                // Dapatkan jumlah member
-                let memberCount = 'Tidak diketahui';
-                try {
-                    memberCount = await bot.getChatMembersCount(chat.id);
-                } catch (e) {}
-                
-                const infoText = 
-                    `📊 *INFORMASI GRUP INI*\n` +
-                    `==================\n\n` +
-                    `📌 *Nama Grup:* ${chat.title}\n` +
-                    `🆔 *ID Grup:* \`${chat.id}\`\n` +
-                    `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
-                    `👥 *Total Member:* ${memberCount}\n` +
-                    `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
-                    `🌐 *Username:* ${chat.username ? '@' + chat.username : 'Tidak ada (private)'}\n` +
-                    `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
-                    `✅ *Grup ini sudah terdaftar!*`;
-                
-                await bot.deleteMessage(chatId, loadingMsg.message_id);
-                await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
-                return;
-                
-            } catch (error) {
-                await bot.deleteMessage(chatId, loadingMsg.message_id);
-                await bot.sendMessage(chatId, '❌ Gagal mengambil info grup.');
-                return;
-            }
-        }
-        
-        // Kalau di private chat tanpa parameter, tampilkan panduan
-        await bot.sendMessage(chatId,
-            '❌ *Format salah!*\n\n' +
-            '*3 Cara Menggunakan /idgrup:*\n\n' +
-            '1️⃣ *Via Username:*\n' +
-            '   `/idgrup @namagrup`\n' +
-            '   Contoh: `/idgrup @python_indonesia`\n\n' +
-            '2️⃣ *Via Link Undangan:*\n' +
-            '   `/idgrup https://t.me/+kodeundangan`\n' +
-            '   Contoh: `/idgrup https://t.me/+abc123xyz`\n\n' +
-            '3️⃣ *Via Reply:*\n' +
-            '   Reply pesan dari grup dengan `/idgrup`\n\n' +
-            '📌 *Tips:*\n' +
-            '• Di grup, admin bisa ketik `/idgrup` saja untuk lihat ID grup ini',
+        // Tidak ada parameter di private chat
+        return bot.sendMessage(chatId,
+            '❌ *Kamu di private chat*\n\n' +
+            '• Ketik `/idgrup` *di dalam grup* untuk lihat ID grup ini.\n' +
+            '• Atau gunakan format:\n' +
+            '  `/idgrup @namagrup`\n' +
+            '  `/idgrup https://t.me/+kode`\n' +
+            '  *Reply pesan* dari grup dengan `/idgrup`',
             { parse_mode: 'Markdown' }
         );
-        return;
     }
     
     // CEK APAKAH INI LINK TELEGRAM
     if (param.includes('t.me/') || param.includes('telegram.me/')) {
-        // Ini adalah link Telegram
         const loadingMsg = await bot.sendMessage(chatId, '🔍 Memproses link undangan...');
         
         try {
@@ -270,98 +248,64 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
                             `==================\n\n` +
                             `📌 *Nama Grup:* ${chat.title}\n` +
                             `🆔 *ID Grup:* \`${chat.id}\`\n` +
-                            `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
                             `👥 *Total Member:* ${memberCount}\n` +
                             `🌐 *Username:* @${chat.username}\n\n` +
                             `⚡ *Aksi Cepat:*\n` +
                             `• Tambah akses: \`/addakses ${chat.id}\``;
                         
                         await bot.deleteMessage(chatId, loadingMsg.message_id);
-                        await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
-                        return;
+                        return bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
+                        
                     } catch (e) {
-                        // Bukan username, lanjut ke proses invite link
+                        // Bukan username, lanjut
                     }
                 }
             }
             
-            if (!inviteCode) {
-                throw new Error('Kode undangan tidak ditemukan');
-            }
-            
-            // ChatAction untuk menunjukkan bot sedang mengetik
-            await bot.sendChatAction(chatId, 'typing');
-            
-            // Coba resolve invite link
-            try {
-                await bot.deleteMessage(chatId, loadingMsg.message_id);
-                await bot.sendMessage(chatId,
-                    `⚠️ *Untuk grup private dengan link undangan:*\n\n` +
-                    `Bot tidak bisa mendapatkan ID langsung dari link undangan karena Telegram membatasi akses.\n\n` +
-                    `📌 *Cara alternatif:*\n` +
-                    `1️⃣ Minta seseorang di grup untuk forward pesan ke sini\n` +
-                    `2️⃣ Reply pesan tersebut dengan /idgrup\n\n` +
-                    `Atau gunakan command:\n` +
-                    `/idgrup @username (jika grup punya username)`,
-                    { parse_mode: 'Markdown' }
-                );
-            } catch (e) {
-                throw e;
-            }
+            await bot.deleteMessage(chatId, loadingMsg.message_id);
+            return bot.sendMessage(chatId,
+                `⚠️ *Untuk grup private dengan link undangan:*\n\n` +
+                `Bot tidak bisa mendapatkan ID langsung dari link undangan karena Telegram membatasi akses.\n\n` +
+                `📌 *Cara alternatif:*\n` +
+                `1️⃣ Minta seseorang di grup untuk forward pesan ke sini\n` +
+                `2️⃣ Reply pesan tersebut dengan /idgrup`,
+                { parse_mode: 'Markdown' }
+            );
             
         } catch (error) {
             await bot.deleteMessage(chatId, loadingMsg.message_id);
-            await bot.sendMessage(chatId, 
-                `❌ Gagal memproses link.\n\n` +
-                `Pastikan:\n` +
-                `• Link undangan valid\n` +
-                `• Atau gunakan cara reply pesan dari grup`
-            );
+            return bot.sendMessage(chatId, '❌ Gagal memproses link.');
         }
-        return;
     }
     
     // JIKA BUKAN LINK, ANGGAP USERNAME
     const cleanUsername = param.replace('@', '');
     
-    // Kirim status loading
     const loadingMsg = await bot.sendMessage(chatId, '🔍 Mencari informasi grup...');
     
     try {
-        // Dapatkan info grup
         const chat = await bot.getChat(`@${cleanUsername}`);
         
-        // Dapatkan jumlah member
         let memberCount = 'Tidak diketahui';
         try {
             memberCount = await bot.getChatMembersCount(chat.id);
         } catch (e) {}
         
-        // Format pesan
         const infoText = 
             `📊 *INFORMASI GRUP*\n` +
             `==================\n\n` +
             `📌 *Nama Grup:* ${chat.title}\n` +
             `🆔 *ID Grup:* \`${chat.id}\`\n` +
-            `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
             `👥 *Total Member:* ${memberCount}\n` +
-            `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
             `🌐 *Username:* @${chat.username}\n` +
             `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
             `⚡ *Aksi Cepat:*\n` +
-            `• Tambah akses: \`/addakses ${chat.id}\`\n` +
-            `• Hapus akses: \`/removeakses ${chat.id}\``;
+            `• Tambah akses: \`/addakses ${chat.id}\``;
         
-        // Hapus pesan loading
         await bot.deleteMessage(chatId, loadingMsg.message_id);
-        
-        // Kirim informasi
-        await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
-        
-        console.log(`Admin ${userId} cek grup @${cleanUsername} (ID: ${chat.id})`);
+        return bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
         
     } catch (error) {
-        // Hapus pesan loading
         await bot.deleteMessage(chatId, loadingMsg.message_id);
         
         let errorMsg = '❌ ';
@@ -372,21 +316,18 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
                     errorMsg += `Grup @${cleanUsername} tidak ditemukan!\n\n` +
                                 `Kemungkinan:\n` +
                                 `• Username salah\n` +
-                                `• Grup adalah private (tidak punya username)\n\n` +
-                                `📌 *Untuk grup private:*\n` +
-                                `• Gunakan link undangan: /idgrup https://t.me/+kodeinvite\n` +
-                                `• Atau reply pesan dari grup dengan /idgrup`;
+                                `• Grup adalah private (tidak punya username)`;
                 } else {
                     errorMsg += body.description;
                 }
             } catch {
-                errorMsg += 'Terjadi kesalahan. Silakan coba lagi.';
+                errorMsg += 'Terjadi kesalahan.';
             }
         } else {
-            errorMsg += 'Terjadi kesalahan. Silakan coba lagi.';
+            errorMsg += 'Terjadi kesalahan.';
         }
         
-        await bot.sendMessage(chatId, errorMsg, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, errorMsg);
     }
 });
 
@@ -397,15 +338,13 @@ bot.onText(/\/addakses (.+)/, async (msg, match) => {
     
     // Hanya admin yang bisa
     if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
-        return;
+        return bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
     }
     
     const groupId = parseInt(match[1]);
     
     if (isNaN(groupId)) {
-        await bot.sendMessage(chatId, '❌ ID grup harus berupa angka!');
-        return;
+        return bot.sendMessage(chatId, '❌ ID grup harus berupa angka!');
     }
     
     // Tambahkan ke daftar
@@ -415,7 +354,7 @@ bot.onText(/\/addakses (.+)/, async (msg, match) => {
     // Coba dapatkan info grup
     try {
         const chat = await bot.getChat(groupId);
-        await bot.sendMessage(chatId,
+        return bot.sendMessage(chatId,
             `✅ *GRUP DITAMBAHKAN*\n\n` +
             `📌 Nama: ${chat.title}\n` +
             `🆔 ID: \`${groupId}\`\n` +
@@ -423,7 +362,7 @@ bot.onText(/\/addakses (.+)/, async (msg, match) => {
             { parse_mode: 'Markdown' }
         );
     } catch {
-        await bot.sendMessage(chatId,
+        return bot.sendMessage(chatId,
             `✅ *GRUP DITAMBAHKAN*\n\n` +
             `🆔 ID: \`${groupId}\`\n` +
             `📊 Total grup terdaftar: ${allowedGroups.size}\n\n` +
@@ -440,29 +379,27 @@ bot.onText(/\/removeakses (.+)/, async (msg, match) => {
     
     // Hanya admin yang bisa
     if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
-        return;
+        return bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
     }
     
     const groupId = parseInt(match[1]);
     
     if (isNaN(groupId)) {
-        await bot.sendMessage(chatId, '❌ ID grup harus berupa angka!');
-        return;
+        return bot.sendMessage(chatId, '❌ ID grup harus berupa angka!');
     }
     
     if (allowedGroups.has(groupId)) {
         allowedGroups.delete(groupId);
         saveAllowedGroups(allowedGroups);
         
-        await bot.sendMessage(chatId,
+        return bot.sendMessage(chatId,
             `✅ *GRUP DIHAPUS*\n\n` +
             `🆔 ID: \`${groupId}\`\n` +
             `📊 Sisa grup terdaftar: ${allowedGroups.size}`,
             { parse_mode: 'Markdown' }
         );
     } else {
-        await bot.sendMessage(chatId, '❌ Grup tidak ditemukan dalam daftar akses!');
+        return bot.sendMessage(chatId, '❌ Grup tidak ditemukan dalam daftar akses!');
     }
 });
 
@@ -473,13 +410,11 @@ bot.onText(/\/listakses/, async (msg) => {
     
     // Hanya admin yang bisa
     if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
-        return;
+        return bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
     }
     
     if (allowedGroups.size === 0) {
-        await bot.sendMessage(chatId, '📋 Belum ada grup yang terdaftar.');
-        return;
+        return bot.sendMessage(chatId, '📋 Belum ada grup yang terdaftar.');
     }
     
     const loadingMsg = await bot.sendMessage(chatId, '📊 Mengambil daftar grup...');
@@ -505,7 +440,7 @@ bot.onText(/\/listakses/, async (msg) => {
         `Total: ${allowedGroups.size} grup\n\n` +
         groupsList.join('\n\n');
     
-    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
 });
 
 // Command /status - Cek status bot
@@ -515,8 +450,7 @@ bot.onText(/\/status/, async (msg) => {
     
     // Hanya admin yang bisa
     if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
-        return;
+        return bot.sendMessage(chatId, '❌ Perintah ini hanya untuk admin.');
     }
     
     const status = 
@@ -526,7 +460,7 @@ bot.onText(/\/status/, async (msg) => {
         `• Mode: Production\n` +
         `• Waktu: ${new Date().toLocaleString('id-ID')}`;
     
-    await bot.sendMessage(chatId, status, { parse_mode: 'Markdown' });
+    return bot.sendMessage(chatId, status, { parse_mode: 'Markdown' });
 });
 
 // Handler untuk pesan yang tidak dikenal
