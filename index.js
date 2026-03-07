@@ -1,23 +1,16 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
-const path = require('path');
+const express = require('express');
 
 // ============= KONFIGURASI =============
 const TOKEN = process.env.BOT_TOKEN || 'TOKEN_BOT_ANDA';
-const ADMIN_ID = parseInt(process.env.ADMIN_ID) || 123456789; // Ganti dengan ID Anda
+const ADMIN_ID = parseInt(process.env.ADMIN_ID) || 123456789;
 const ALLOWED_GROUPS_FILE = './allowed_groups.json';
 
 // Inisialisasi bot
 const bot = new TelegramBot(TOKEN, { 
-    polling: process.env.NODE_ENV !== 'production',
-    webHook: process.env.NODE_ENV === 'production'
+    polling: false // Matikan polling, pakai webhook
 });
-
-// Setup webhook untuk production (Heroku)
-if (process.env.NODE_ENV === 'production') {
-    const url = process.env.APP_URL || `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`;
-    bot.setWebHook(`${url}/bot${TOKEN}`);
-}
 
 // ============= FUNGSI BANTUAN =============
 
@@ -59,7 +52,7 @@ function isGroupAllowed(chatId) {
 // ============= MIDDLEWARE =============
 
 // Middleware untuk cek akses grup
-async function checkGroupAccess(msg, next) {
+async function checkGroupAccess(msg) {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
@@ -134,7 +127,7 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
         return;
     }
     
-    const username = match[1]; // Ambil username dari parameter
+    const username = match[1];
     
     if (!username) {
         await bot.sendMessage(chatId,
@@ -159,6 +152,14 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
         // Dapatkan info grup
         const chat = await bot.getChat(`@${cleanUsername}`);
         
+        // Dapatkan jumlah member
+        let memberCount = 'Tidak diketahui';
+        try {
+            memberCount = await bot.getChatMembersCount(chat.id);
+        } catch (e) {
+            console.log('Gagal get member count');
+        }
+        
         // Format pesan
         const infoText = 
             `📊 *INFORMASI GRUP*\n` +
@@ -166,7 +167,7 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
             `📌 *Nama Grup:* ${chat.title}\n` +
             `🆔 *ID Grup:* \`${chat.id}\`\n` +
             `🔗 *Tipe Grup:* ${chat.type === 'supergroup' ? 'Supergroup' : 'Group'}\n` +
-            `👥 *Total Member:* ${await bot.getChatMembersCount(chat.id)}\n` +
+            `👥 *Total Member:* ${memberCount}\n` +
             `📝 *Deskripsi:* ${chat.description || 'Tidak ada'}\n` +
             `🌐 *Username:* @${chat.username}\n` +
             `🔐 *Private:* ${!chat.username ? 'Ya' : 'Tidak'}\n\n` +
@@ -188,11 +189,15 @@ bot.onText(/\/idgrup(?:\s+(.+))?/, async (msg, match) => {
         
         let errorMsg = '❌ ';
         if (error.response && error.response.body) {
-            const body = JSON.parse(error.response.body);
-            if (body.description.includes('chat not found')) {
-                errorMsg += `Grup @${cleanUsername} tidak ditemukan!\n\nPastikan:\n• Username benar\n• Grup memiliki username publik`;
-            } else {
-                errorMsg += body.description;
+            try {
+                const body = JSON.parse(error.response.body);
+                if (body.description.includes('chat not found')) {
+                    errorMsg += `Grup @${cleanUsername} tidak ditemukan!\n\nPastikan:\n• Username benar\n• Grup memiliki username publik`;
+                } else {
+                    errorMsg += body.description;
+                }
+            } catch {
+                errorMsg += 'Terjadi kesalahan. Silakan coba lagi.';
             }
         } else {
             errorMsg += 'Terjadi kesalahan. Silakan coba lagi.';
@@ -322,7 +327,7 @@ bot.onText(/\/status/, async (msg) => {
         `📊 *STATUS BOT*\n\n` +
         `• Status: ✅ Online\n` +
         `• Total grup terdaftar: ${allowedGroups.size}\n` +
-        `• Mode: ${process.env.NODE_ENV === 'production' ? 'Production' : 'Development'}\n` +
+        `• Mode: Production\n` +
         `• Waktu: ${new Date().toLocaleString('id-ID')}`;
     
     await bot.sendMessage(chatId, status, { parse_mode: 'Markdown' });
@@ -333,12 +338,8 @@ bot.on('message', async (msg) => {
     // Abaikan command yang sudah ditangani
     if (msg.text && msg.text.startsWith('/')) return;
     
-    const chatId = msg.chat.id;
-    
     // Cek akses untuk pesan biasa
-    if (await checkGroupAccess(msg)) {
-        // Bot hanya merespon command, pesan biasa diabaikan
-    }
+    await checkGroupAccess(msg);
 });
 
 // ============= ERROR HANDLER =============
@@ -350,26 +351,40 @@ bot.on('webhook_error', (error) => {
     console.error('Webhook error:', error);
 });
 
+// ============= SETUP WEBHOOK & SERVER =============
 console.log('🤖 Bot started...');
 
-// Untuk Heroku, listen ke port
-if (process.env.NODE_ENV === 'production') {
-    const express = require('express');
-    const app = express();
-    const port = process.env.PORT || 3000;
-    
-    app.get('/', (req, res) => {
-        res.send('Bot is running!');
-    });
-    
-    app.post(`/bot${TOKEN}`, (req, res) => {
-        bot.processUpdate(req.body);
-        res.sendStatus(200);
-    });
-    
-    app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
-    });
-}
+// Setup Express server untuk Heroku
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware untuk parse JSON
+app.use(express.json());
+
+// Route untuk cek status
+app.get('/', (req, res) => {
+    res.send('Bot is running! 🚀');
+});
+
+// Route untuk webhook Telegram
+app.post(`/bot${TOKEN}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+});
+
+// Set webhook ke Telegram
+const appName = process.env.HEROKU_APP_NAME || 'testerbot-074c15ac0dd7';
+const webhookUrl = `https://${appName}.herokuapp.com/bot${TOKEN}`;
+
+bot.setWebHook(webhookUrl).then(() => {
+    console.log(`Webhook set to: ${webhookUrl}`);
+}).catch(err => {
+    console.error('Failed to set webhook:', err);
+});
+
+// Start server
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
 
 module.exports = bot;
