@@ -11,7 +11,7 @@ makeInMemoryStore
 const P = require("pino")
 const fs = require("fs")
 
-// ===== ADMIN BOT =====
+// ===== OWNER BOT =====
 const OWNER = [
 "6281234567890@s.whatsapp.net" // ganti nomor kamu
 ]
@@ -62,7 +62,7 @@ const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
 if(shouldReconnect){
-console.log("RECONNECTING")
+console.log("RECONNECTING...")
 startBot()
 }
 
@@ -83,6 +83,8 @@ sock.ev.on("messages.upsert", async (m)=>{
 
 try{
 
+console.log("EVENT PESAN MASUK")
+
 const msg = m.messages[0]
 
 if(!msg.message) return
@@ -92,7 +94,7 @@ const from = msg.key.remoteJid
 const sender = msg.key.participant || msg.key.remoteJid
 const fromMe = msg.key.fromMe
 
-// ===== AMBIL TEXT =====
+// ambil text
 const text =
 msg.message.conversation ||
 msg.message.extendedTextMessage?.text ||
@@ -133,14 +135,13 @@ test
 // ===== ID GRUP =====
 if(text.startsWith("!idgrup")){
 
-// harus di grup
 if(!from.endsWith("@g.us")){
 return sock.sendMessage(from,{
 text:"❌ Command hanya bisa di grup"
 })
 }
 
-// hanya owner atau bot
+// hanya owner atau bot sendiri
 if(!OWNER.includes(sender) && !fromMe){
 return sock.sendMessage(from,{
 text:"❌ Hanya admin bot"
