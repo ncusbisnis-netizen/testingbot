@@ -1,3 +1,5 @@
+global.crypto = require("crypto")
+
 const {
 default: makeWASocket,
 useMultiFileAuthState,
@@ -61,18 +63,14 @@ console.log("BOT CONNECTED ✅")
 // save session
 sock.ev.on("creds.update", saveCreds)
 
-// message handler
+// handler pesan
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
 const msg = messages[0]
 
 if(!msg.message) return
 if(msg.key.fromMe) return
-if(msg.messageStubType) return
 if(msg.key.remoteJid === "status@broadcast") return
-
-// skip pesan lama
-if(msg.message?.protocolMessage) return
 
 const from = msg.key.remoteJid
 
@@ -82,10 +80,9 @@ msg.message.extendedTextMessage?.text
 
 if(!text) return
 
-console.log("message:",text)
+console.log("message:", text)
 
-// COMMAND
-
+// command
 if(text === "ping"){
 
 await sock.sendMessage(from,{
