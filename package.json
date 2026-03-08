@@ -1,6 +1,7 @@
 {
-  "name": "bot",
+  "name": "whatsapp-bot",
   "version": "1.0.0",
+  "description": "WhatsApp Bot for Heroku",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -8,5 +9,8 @@
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.19",
     "pino": "^8.17.2"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
