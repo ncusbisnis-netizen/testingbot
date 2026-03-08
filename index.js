@@ -10,7 +10,6 @@ makeInMemoryStore
 
 const P = require("pino")
 const fs = require("fs")
-const qrcode = require("qrcode-terminal")
 
 // ===== KONFIGURASI =====
 const OWNER = [
@@ -43,20 +42,31 @@ return ""
 // fungsi utama
 async function startBot() {
 try {
-console.log("🚀 Starting Bot...")
+console.log("🚀 Starting Bot with Baileys 6.7.19...")
 
-// load session dari env
-if (process.env.SESSION && !fs.existsSync("./session/creds.json")) {
+// LOAD SESSION DARI ENV (INI YANG PAKAI)
+if (process.env.SESSION) {
 try {
+if (!fs.existsSync("./session")) {
+fs.mkdirSync("./session", { recursive: true })
+}
+        
+// Cek apakah session sudah ada
+if (!fs.existsSync("./session/creds.json")) {
+console.log("📦 Loading session from Heroku env...")
 const session = JSON.parse(
 Buffer.from(process.env.SESSION, "base64").toString()
 )
-fs.mkdirSync("./session", { recursive: true })
 fs.writeFileSync("./session/creds.json", JSON.stringify(session, null, 2))
-console.log("✅ Session loaded from env")
-} catch (e) {
-console.log("❌ Failed load session:", e.message)
+console.log("✅ Session loaded successfully")
+} else {
+console.log("✅ Using existing session file")
 }
+} catch (e) {
+console.log("❌ Gagal load session:", e.message)
+}
+} else {
+console.log("⚠️ No SESSION env found, will use QR (if first run)")
 }
 
 const { state, saveCreds } = await useMultiFileAuthState("session")
@@ -66,23 +76,27 @@ console.log("📦 Baileys version:", version)
 const sock = makeWASocket({
 version,
 auth: state,
-printQRInTerminal: false,
+printQRInTerminal: true, // QR code sebagai text fallback
 markOnlineOnConnect: true,
 syncFullHistory: false,
-browser: ["Ubuntu", "Chrome", "20.0.0"],
+browser: ["Heroku", "Chrome", "1.0"],
 logger: P({ level: "error" }),
 getMessage: (key) => ({ conversation: "..." })
 })
 
 store.bind(sock.ev)
 
-// QR Code
+// Handle koneksi
 sock.ev.on("connection.update", (update) => {
 const { connection, lastDisconnect, qr } = update
 
-if (qr) {
-qrcode.generate(qr, { small: true })
-console.log("📱 Scan QR di atas dengan WhatsApp")
+if (qr && !process.env.SESSION) {
+// Hanya tampilkan QR kalau真的 belum punya session
+console.log("\n" + "=".repeat(50))
+console.log("📱 SCAN QR CODE:")
+console.log("=".repeat(50))
+console.log(qr)
+console.log("=".repeat(50))
 }
 
 if (connection === "close") {
@@ -90,14 +104,19 @@ const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
 if (shouldReconnect) {
-console.log("🔄 Reconnecting in 5s...")
+console.log("🔄 Connection closed, reconnecting in 5s...")
 setTimeout(() => startBot(), 5000)
+} else {
+console.log("❌ Logged out, need new session")
 }
 }
 
 if (connection === "open") {
+console.log("\n" + "=".repeat(50))
 console.log("✅ BOT CONNECTED!")
-console.log("👤 Owner:", OWNER[0])
+console.log("👤 Owner:", OWNER[0].split("@")[0])
+console.log("⏰ Time:", new Date().toLocaleString())
+console.log("=".repeat(50))
 }
 })
 
@@ -116,8 +135,11 @@ const sender = msg.key.participant || msg.key.remoteJid
 const fromMe = msg.key.fromMe
 const text = getMessageText(msg)
 
-// log
-console.log(`📨 [${from.split("@")[0]}] ${sender.split("@")[0]}: ${text || "(media)"}`)
+// log pesan
+const jenis = from.endsWith("@g.us") ? "👥 GRUP" : "👤 CHAT"
+const senderName = sender.split("@")[0]
+const fromName = from.split("@")[0]
+console.log(`${jenis} [${fromName}] ${senderName}: ${text || "(media)"}`)
 
 if (fromMe || !text) return
 
@@ -125,20 +147,20 @@ await sock.readMessages([msg.key])
 
 const cmd = text.toLowerCase().trim()
 
-// commands
+// COMMANDS
 if (cmd === "ping") {
 await sock.sendMessage(from, { text: "pong 🏓" })
-console.log("✅ ping replied")
+console.log("✅ Reply: ping")
 }
 
 else if (cmd === "test") {
-await sock.sendMessage(from, { text: "✅ bot aktif" })
-console.log("✅ test replied")
+await sock.sendMessage(from, { text: "✅ Bot aktif! (Baileys 6.7.19)" })
+console.log("✅ Reply: test")
 }
 
 else if (cmd === "menu") {
 await sock.sendMessage(from, { 
-text: `╔══《 BOT MENU 》══╗
+text: `╔══════《 BOT 》══════╗
 
 ⚡ ping
 ⚡ test
@@ -146,54 +168,61 @@ text: `╔══《 BOT MENU 》══╗
 ⚡ info
 ⚡ !owner
 ⚡ !idgrup
-╚════════════════╝` 
+╚════════════════════╝` 
 })
-console.log("✅ menu replied")
+console.log("✅ Reply: menu")
 }
 
 else if (cmd === "info") {
 await sock.sendMessage(from, { 
-text: `📱 INFO BOT
+text: `📱 *INFO BOT*
 ├ Versi: 6.7.19
 ├ Owner: ${OWNER[0].split("@")[0]}
 ├ Status: Online
-└ Runtime: ${process.uptime().toFixed(0)}s` 
+├ Runtime: ${Math.floor(process.uptime())}s
+└ Platform: Heroku` 
 })
 }
 
 else if (cmd === "!owner") {
 await sock.sendMessage(from, { 
-text: `👑 Owner: ${OWNER[0].split("@")[0]}` 
+text: `👑 Owner: ${OWNER[0].split("@")[0]}\n\nHubungi hanya untuk hal penting.` 
 })
 }
 
 else if (text.startsWith("!idgrup")) {
 if (!from.endsWith("@g.us")) {
-await sock.sendMessage(from, { text: "❌ hanya di grup" })
+await sock.sendMessage(from, { text: "❌ Command hanya untuk di grup" })
 return
 }
 if (!OWNER.includes(sender)) {
-await sock.sendMessage(from, { text: "❌ hanya owner" })
+await sock.sendMessage(from, { text: "❌ Hanya owner" })
 return
 }
-await sock.sendMessage(from, { text: `📌 ID Grup:\n${from}` })
-console.log("✅ idgrup replied")
+await sock.sendMessage(from, { text: `📌 ID Grup ini:\n\`${from}\`` })
+console.log("✅ Reply: idgrup")
 }
 
 } catch (err) {
-console.log("❌ Error:", err.message)
+console.log("❌ Error handling message:", err.message)
 }
 })
 
 } catch (err) {
-console.log("❌ Fatal:", err.message)
+console.log("❌ Fatal error:", err.message)
 setTimeout(() => startBot(), 5000)
 }
 }
 
 // error handler
-process.on("uncaughtException", (err) => console.log("⚠️", err.message))
-process.on("unhandledRejection", (err) => console.log("⚠️", err.message))
+process.on("uncaughtException", (err) => {
+console.log("⚠️ Uncaught Exception:", err.message)
+})
+
+process.on("unhandledRejection", (err) => {
+console.log("⚠️ Unhandled Rejection:", err.message)
+})
 
 // start
+console.log("🎯 Initializing WhatsApp Bot...")
 startBot()
