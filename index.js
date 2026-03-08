@@ -1,62 +1,59 @@
-const makeWASocket = require("@whiskeysockets/baileys").default;
-const { useSingleFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
-const P = require("pino");
+const { default: makeWASocket, useSingleFileAuthState, fetchLatestBaileysVersion, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys')
+const { state, saveState } = useSingleFileAuthState('./session.json')
+const P = require('pino')
+const moment = require('moment')
 
-const { state, saveState } = useSingleFileAuthState("./session.json");
-
+// Inisialisasi socket
 async function startBot() {
-    const { version } = await fetchLatestBaileysVersion();
-
+    const { version } = await fetchLatestBaileysVersion()
     const sock = makeWASocket({
-        logger: P({ level: "info" }),
+        version,
+        logger: P({ level: 'silent' }),
         printQRInTerminal: true,
-        auth: state,
-        version
-    });
+        auth: state
+    })
 
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update
+        if(connection === 'close') {
+            if(lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut){
+                startBot()
+            } else {
+                console.log('Session WA terlogout. Buat ulang session.')
+            }
+        } else if(connection === 'open') {
+            console.log('BOT CONNECTED')
+        }
+    })
 
-        const from = msg.key.remoteJid;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+    sock.ev.on('creds.update', saveState)
 
-        console.log("EVENT PESAN MASUK", from, text);
+    sock.ev.on('messages.upsert', async (m) => {
+        const message = m.messages[0]
+        if(!message.message || message.key.fromMe) return // abaikan pesan sendiri
 
-        if (text.startsWith("!idgrup")) {
-            // Hanya di grup
-            if (!from.endsWith("@g.us")) {
-                await sock.sendMessage(from, { text: "Command ini hanya bisa dipakai di grup!" });
-                return;
+        const from = message.key.remoteJid
+        const text = message.message.conversation || message.message.extendedTextMessage?.text
+        console.log('EVENT PESAN MASUK:', from, text)
+
+        // Pastikan bot admin bot (nomor bot) bisa akses
+        const isAdminBot = message.key.participant ? false : true
+
+        // Command !idgrup
+        if(text?.startsWith('!idgrup') && isAdminBot){
+            let grupId = from
+            // jika user ngetik !idgrup [link]
+            const args = text.split(' ')
+            if(args[1]) {
+                // ambil id dari link WA
+                const link = args[1]
+                const match = link.match(/https:\/\/chat\.whatsapp\.com\/([0-9A-Za-z]+)/)
+                if(match) grupId = match[1]
             }
 
-            // Cek bot admin
-            const groupMetadata = await sock.groupMetadata(from);
-            const botNumber = sock.user.id.split(":")[0];
-            const botIsAdmin = groupMetadata.participants.find(p => p.id.split(":")[0] === botNumber)?.admin !== null;
-
-            if (!botIsAdmin) {
-                await sock.sendMessage(from, { text: "Bot harus admin untuk menjalankan command ini." });
-                return;
-            }
-
-            // Kirim ID grup
-            await sock.sendMessage(from, { text: `ID Grup: ${from}` });
+            await sock.sendMessage(from, { text: `ID Grup: ${grupId}` })
         }
-    });
-
-    sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === "close") {
-            const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== 401);
-            console.log("connection closed, reconnecting ", shouldReconnect);
-            if (shouldReconnect) startBot();
-        } else if (connection === "open") {
-            console.log("BOT CONNECTED");
-        }
-    });
-
-    sock.ev.on("creds.update", saveState);
+    })
 }
 
-startBot();
+startBot()
