@@ -1,56 +1,97 @@
 const {
 default: makeWASocket,
 useMultiFileAuthState,
-fetchLatestBaileysVersion
+fetchLatestBaileysVersion,
+DisconnectReason
 } = require("@whiskeysockets/baileys")
 
 const fs = require("fs")
 
-async function start(){
+async function startBot(){
 
-const { state, saveCreds } = await useMultiFileAuthState("./session")
+// convert SESSION env ke creds.json
+if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
+const session = JSON.parse(
+Buffer.from(process.env.SESSION,"base64").toString()
+)
 
+fs.mkdirSync("./session",{recursive:true})
+fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
+}
+
+const { state, saveCreds } = await useMultiFileAuthState("session")
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
 version,
 auth: state,
-browser: ["Session Generator","Chrome","1.0"]
+syncFullHistory: false,
+browser: ["Heroku Bot","Chrome","1.0"]
 })
 
-sock.ev.on("connection.update", async(update)=>{
+// auto reconnect
+sock.ev.on("connection.update",(update)=>{
+const { connection, lastDisconnect } = update
 
-const { connection } = update
+if(connection === "close"){
+
+const shouldReconnect =
+lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+
+if(shouldReconnect){
+console.log("reconnecting...")
+startBot()
+}
+
+}
 
 if(connection === "open"){
+console.log("BOT CONNECTED ✅")
+}
 
-console.log("LOGIN BERHASIL")
+})
 
-const session = fs.readFileSync("./session/creds.json")
+// save session
+sock.ev.on("creds.update", saveCreds)
 
-const base64 = Buffer.from(session).toString("base64")
+// message handler
+sock.ev.on("messages.upsert", async ({ messages }) => {
 
-console.log("SESSION ANDA:")
-console.log(base64)
+const msg = messages[0]
+if(!msg.message) return
+
+const from = msg.key.remoteJid
+
+const text =
+msg.message.conversation ||
+msg.message.extendedTextMessage?.text
+
+if(!text) return
+
+// command ping
+if(text === "ping"){
+
+await sock.sendMessage(from,{
+text:"pong 🟢 bot aktif"
+})
+
+}
+
+// command test
+if(text === "menu"){
+
+await sock.sendMessage(from,{
+text:`BOT HEROKU AKTIF
+
+menu
+ping
+test`
+})
 
 }
 
 })
 
-sock.ev.on("creds.update", saveCreds)
-
-// pairing code
-if(!sock.authState.creds.registered){
-
-const number = process.env.NUMBER
-
-const code = await sock.requestPairingCode(number)
-
-console.log("PAIRING CODE:")
-console.log(code)
-
 }
 
-}
-
-start()
+startBot()
