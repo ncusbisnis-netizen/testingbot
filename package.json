@@ -1,7 +1,7 @@
 {
-  "name": "wa-bot",
+  "name": "wa-bot-heroku",
   "version": "1.0.0",
-  "description": "WhatsApp bot deploy via Heroku + GitHub",
+  "description": "WhatsApp bot Heroku + GitHub ready",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -10,7 +10,9 @@
     "node": "18.x"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^4.0.11",
-    "pino": "^8.14.0"
+    "@whiskeysockets/baileys": "^4.0.10",
+    "pino": "^8.14.1",
+    "qrcode-terminal": "^0.12.0",
+    "moment": "^2.29.4"
   }
 }
