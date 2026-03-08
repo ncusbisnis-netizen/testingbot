@@ -11,7 +11,7 @@ const fs = require("fs")
 
 async function startBot(){
 
-// ambil SESSION dari env
+// ambil SESSION dari Heroku
 if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
 
 const session = JSON.parse(
@@ -35,7 +35,7 @@ markOnlineOnConnect:false,
 browser:["Heroku Bot","Chrome","1.0"]
 })
 
-// reconnect
+// connection update
 sock.ev.on("connection.update",(update)=>{
 
 const { connection, lastDisconnect } = update
@@ -45,10 +45,10 @@ if(connection === "close"){
 const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
-console.log("connection closed")
+console.log("Connection closed")
 
 if(shouldReconnect){
-console.log("reconnecting...")
+console.log("Reconnecting...")
 startBot()
 }
 
@@ -63,26 +63,31 @@ console.log("BOT CONNECTED ✅")
 // save session
 sock.ev.on("creds.update", saveCreds)
 
-// handler pesan
+// message handler
 sock.ev.on("messages.upsert", async ({ messages }) => {
+
+try{
 
 const msg = messages[0]
 
 if(!msg.message) return
 if(msg.key.fromMe) return
 if(msg.key.remoteJid === "status@broadcast") return
+if(msg.key.remoteJid.endsWith("@g.us")) return
 
 const from = msg.key.remoteJid
 
 const text =
 msg.message.conversation ||
-msg.message.extendedTextMessage?.text
+msg.message.extendedTextMessage?.text ||
+""
 
 if(!text) return
 
-console.log("message:", text)
+console.log("Message:",text)
 
-// command
+// COMMAND
+
 if(text === "ping"){
 
 await sock.sendMessage(from,{
@@ -109,6 +114,10 @@ await sock.sendMessage(from,{
 text:"bot berjalan normal ✅"
 })
 
+}
+
+}catch(err){
+console.log("ERROR:",err)
 }
 
 })
