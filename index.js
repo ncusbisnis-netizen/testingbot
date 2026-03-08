@@ -10,258 +10,190 @@ makeInMemoryStore
 
 const P = require("pino")
 const fs = require("fs")
+const qrcode = require("qrcode-terminal")
 
-// ===== ADMIN BOT =====
+// ===== KONFIGURASI =====
 const OWNER = [
-"6281234567890@s.whatsapp.net" // ganti nomor kamu
+"6283133199990@s.whatsapp.net" // GANTI NOMOR KAMU
 ]
 
-// store message
+// store pesan
 const store = makeInMemoryStore({
 logger: P().child({ level: "silent", stream: "store" })
 })
 
-// Fungsi untuk mengekstrak teks dari berbagai tipe pesan
+// fungsi ambil teks
 function getMessageText(message) {
 try {
-if (!message) return ""
-    
-// Cek berbagai kemungkinan tipe pesan
+if (!message?.message) return ""
 const msg = message.message
-    
-if (!msg) return ""
 
-// Pesan teks biasa
-if (msg.conversation) {
-return msg.conversation
-}
-    
-// Extended text message (termasuk yang reply)
-if (msg.extendedTextMessage?.text) {
-return msg.extendedTextMessage.text
-}
-    
-// Caption untuk media
-if (msg.imageMessage?.caption) {
-return msg.imageMessage.caption
-}
-    
-if (msg.videoMessage?.caption) {
-return msg.videoMessage.caption
-}
-    
-if (msg.documentMessage?.caption) {
-return msg.documentMessage.caption
-}
-    
-if (msg.audioMessage?.caption) {
-return msg.audioMessage.caption
-}
-    
-// Button response
-if (msg.buttonsResponseMessage?.selectedDisplayText) {
-return msg.buttonsResponseMessage.selectedDisplayText
-}
-    
-if (msg.buttonsResponseMessage?.selectedButtonId) {
-return msg.buttonsResponseMessage.selectedButtonId
-}
-    
-// List response
-if (msg.listResponseMessage?.title) {
-return msg.listResponseMessage.title
-}
-    
-if (msg.listResponseMessage?.description) {
-return msg.listResponseMessage.description
-}
-    
-// Template button reply
-if (msg.templateButtonReplyMessage?.selectedId) {
-return msg.templateButtonReplyMessage.selectedId
-}
-    
-if (msg.templateButtonReplyMessage?.selectedDisplayText) {
-return msg.templateButtonReplyMessage.selectedDisplayText
-}
-    
-// Interactive response
-if (msg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJSON) {
-try {
-const params = JSON.parse(msg.interactiveResponseMessage.nativeFlowResponseMessage.paramsJSON)
-return params.screen_0?.selected_option || JSON.stringify(params)
+if (msg.conversation) return msg.conversation
+if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text
+if (msg.imageMessage?.caption) return msg.imageMessage.caption
+if (msg.videoMessage?.caption) return msg.videoMessage.caption
+if (msg.documentMessage?.caption) return msg.documentMessage.caption
+
+return ""
 } catch {
 return ""
 }
 }
-    
-// Jika ada pesan yang di-quote (context info)
-if (msg.extendedTextMessage?.contextInfo?.quotedMessage) {
-const quotedMsg = msg.extendedTextMessage.contextInfo.quotedMessage
-    
-// Rekursif cek pesan yang di-quote
-if (quotedMsg.conversation) {
-return `[Membalas] ${quotedMsg.conversation}`
-}
-    
-if (quotedMsg.extendedTextMessage?.text) {
-return `[Membalas] ${quotedMsg.extendedTextMessage.text}`
-}
-}
 
-return ""
-} catch (error) {
-console.log("Error extracting text:", error)
-return ""
-}
-}
+// fungsi utama
+async function startBot() {
+try {
+console.log("🚀 Starting Bot...")
 
-async function startBot(){
-
-// ===== LOAD SESSION =====
-if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
+// load session dari env
+if (process.env.SESSION && !fs.existsSync("./session/creds.json")) {
+try {
 const session = JSON.parse(
-Buffer.from(process.env.SESSION,"base64").toString()
+Buffer.from(process.env.SESSION, "base64").toString()
 )
-fs.mkdirSync("./session",{recursive:true})
-fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
-console.log("SESSION LOADED")
+fs.mkdirSync("./session", { recursive: true })
+fs.writeFileSync("./session/creds.json", JSON.stringify(session, null, 2))
+console.log("✅ Session loaded from env")
+} catch (e) {
+console.log("❌ Failed load session:", e.message)
+}
 }
 
 const { state, saveCreds } = await useMultiFileAuthState("session")
 const { version } = await fetchLatestBaileysVersion()
+console.log("📦 Baileys version:", version)
 
 const sock = makeWASocket({
 version,
 auth: state,
-printQRInTerminal:false,
-markOnlineOnConnect:true,
-syncFullHistory:false,
-browser:["Heroku Bot","Chrome","1.0"],
-logger:P({level:"silent"})
+printQRInTerminal: false,
+markOnlineOnConnect: true,
+syncFullHistory: false,
+browser: ["Ubuntu", "Chrome", "20.0.0"],
+logger: P({ level: "error" }),
+getMessage: (key) => ({ conversation: "..." })
 })
 
 store.bind(sock.ev)
 
-// ===== CONNECTION =====
-sock.ev.on("connection.update",(update)=>{
-const { connection, lastDisconnect } = update
+// QR Code
+sock.ev.on("connection.update", (update) => {
+const { connection, lastDisconnect, qr } = update
 
-if(connection === "close"){
-const shouldReconnect =
+if (qr) {
+qrcode.generate(qr, { small: true })
+console.log("📱 Scan QR di atas dengan WhatsApp")
+}
+
+if (connection === "close") {
+const shouldReconnect = 
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-if(shouldReconnect){
-console.log("RECONNECTING")
-startBot()
+
+if (shouldReconnect) {
+console.log("🔄 Reconnecting in 5s...")
+setTimeout(() => startBot(), 5000)
 }
 }
 
-if(connection === "open"){
-console.log("BOT CONNECTED")
+if (connection === "open") {
+console.log("✅ BOT CONNECTED!")
+console.log("👤 Owner:", OWNER[0])
 }
 })
 
-// save session
+// save creds
 sock.ev.on("creds.update", saveCreds)
 
-// ===== MESSAGE EVENT =====
-sock.ev.on("messages.upsert", async (m)=>{
-
-try{
+// handle pesan
+sock.ev.on("messages.upsert", async (m) => {
+try {
 const msg = m.messages[0]
-
-if(!msg.message) return
-if(msg.key.remoteJid === "status@broadcast") return
+if (!msg.message) return
+if (msg.key.remoteJid === "status@broadcast") return
 
 const from = msg.key.remoteJid
 const sender = msg.key.participant || msg.key.remoteJid
 const fromMe = msg.key.fromMe
-
-// AMBIL TEXT MENGGUNAKAN FUNGSI BARU
 const text = getMessageText(msg)
 
-// Log lengkap untuk debugging
-console.log("===== DETAIL PESAN =====")
-console.log("FROM:", from)
-console.log("SENDER:", sender)
-console.log("TEXT:", text || "(KOSONG)")
-console.log("TIPE PESAN:", Object.keys(msg.message)[0])
-console.log("DARI BOT:", fromMe)
-console.log("=======================")
+// log
+console.log(`📨 [${from.split("@")[0]}] ${sender.split("@")[0]}: ${text || "(media)"}`)
 
-// Skip jika tidak ada teks (tapi tetap log untuk debugging)
-if(!text) {
-console.log("PESAN NON-TEKS (dilewati)")
-return
-}
+if (fromMe || !text) return
 
-// read message
 await sock.readMessages([msg.key])
 
-// ===== COMMAND (case insensitive) =====
 const cmd = text.toLowerCase().trim()
 
-// ping
-if(cmd === "ping"){
-await sock.sendMessage(from,{ text:"pong" })
-console.log("RESPON: pong dikirim ke", from)
+// commands
+if (cmd === "ping") {
+await sock.sendMessage(from, { text: "pong 🏓" })
+console.log("✅ ping replied")
 }
 
-// test
-if(cmd === "test"){
-await sock.sendMessage(from,{ text:"bot aktif" })
-console.log("RESPON: bot aktif dikirim ke", from)
+else if (cmd === "test") {
+await sock.sendMessage(from, { text: "✅ bot aktif" })
+console.log("✅ test replied")
 }
 
-// menu
-if(cmd === "menu"){
-await sock.sendMessage(from,{
-text:`🤖 MENU BOT
+else if (cmd === "menu") {
+await sock.sendMessage(from, { 
+text: `╔══《 BOT MENU 》══╗
 
-ping - Cek bot
-menu - Tampilkan menu
-test - Test bot
-!idgrup - Lihat ID grup (khusus grup)
-!halo - Sapaan`
+⚡ ping
+⚡ test
+⚡ menu
+⚡ info
+⚡ !owner
+⚡ !idgrup
+╚════════════════╝` 
 })
-console.log("RESPON: menu dikirim ke", from)
+console.log("✅ menu replied")
 }
 
-// halo
-if(cmd === "!halo"){
-await sock.sendMessage(from,{
-text:`Halo juga! 👋\nKamu: ${sender.split("@")[0]}`
-})
-}
-
-// ===== ID GRUP =====
-if(text.startsWith("!idgrup")){
-
-// harus di grup
-if(!from.endsWith("@g.us")){
-return sock.sendMessage(from,{
-text:"❌ Command hanya bisa di grup"
+else if (cmd === "info") {
+await sock.sendMessage(from, { 
+text: `📱 INFO BOT
+├ Versi: 6.7.19
+├ Owner: ${OWNER[0].split("@")[0]}
+├ Status: Online
+└ Runtime: ${process.uptime().toFixed(0)}s` 
 })
 }
 
-// hanya owner atau bot
-if(!OWNER.includes(sender) && !fromMe){
-return sock.sendMessage(from,{
-text:"❌ Hanya admin bot"
+else if (cmd === "!owner") {
+await sock.sendMessage(from, { 
+text: `👑 Owner: ${OWNER[0].split("@")[0]}` 
 })
 }
 
-await sock.sendMessage(from,{
-text:`ID Grup:\n${from}`
+else if (text.startsWith("!idgrup")) {
+if (!from.endsWith("@g.us")) {
+await sock.sendMessage(from, { text: "❌ hanya di grup" })
+return
+}
+if (!OWNER.includes(sender)) {
+await sock.sendMessage(from, { text: "❌ hanya owner" })
+return
+}
+await sock.sendMessage(from, { text: `📌 ID Grup:\n${from}` })
+console.log("✅ idgrup replied")
+}
+
+} catch (err) {
+console.log("❌ Error:", err.message)
+}
 })
-console.log("RESPON: ID grup dikirim ke", from)
+
+} catch (err) {
+console.log("❌ Fatal:", err.message)
+setTimeout(() => startBot(), 5000)
+}
 }
 
-}catch(err){
-console.log("ERROR DETAIL:", err)
-}
-})
+// error handler
+process.on("uncaughtException", (err) => console.log("⚠️", err.message))
+process.on("unhandledRejection", (err) => console.log("⚠️", err.message))
 
-}
-
+// start
 startBot()
