@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.19"
+    "@whiskeysockets/baileys": "6.7.19",
+    "pino": "^8.17.2"
   }
 }
