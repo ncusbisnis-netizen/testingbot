@@ -5,8 +5,7 @@ default: makeWASocket,
 useMultiFileAuthState,
 fetchLatestBaileysVersion,
 DisconnectReason,
-makeInMemoryStore,
-getContentType
+makeInMemoryStore
 } = require("@whiskeysockets/baileys")
 
 const P = require("pino")
@@ -22,18 +21,110 @@ const store = makeInMemoryStore({
 logger: P().child({ level: "silent", stream: "store" })
 })
 
+// Fungsi untuk mengekstrak teks dari berbagai tipe pesan
+function getMessageText(message) {
+try {
+if (!message) return ""
+    
+// Cek berbagai kemungkinan tipe pesan
+const msg = message.message
+    
+if (!msg) return ""
+
+// Pesan teks biasa
+if (msg.conversation) {
+return msg.conversation
+}
+    
+// Extended text message (termasuk yang reply)
+if (msg.extendedTextMessage?.text) {
+return msg.extendedTextMessage.text
+}
+    
+// Caption untuk media
+if (msg.imageMessage?.caption) {
+return msg.imageMessage.caption
+}
+    
+if (msg.videoMessage?.caption) {
+return msg.videoMessage.caption
+}
+    
+if (msg.documentMessage?.caption) {
+return msg.documentMessage.caption
+}
+    
+if (msg.audioMessage?.caption) {
+return msg.audioMessage.caption
+}
+    
+// Button response
+if (msg.buttonsResponseMessage?.selectedDisplayText) {
+return msg.buttonsResponseMessage.selectedDisplayText
+}
+    
+if (msg.buttonsResponseMessage?.selectedButtonId) {
+return msg.buttonsResponseMessage.selectedButtonId
+}
+    
+// List response
+if (msg.listResponseMessage?.title) {
+return msg.listResponseMessage.title
+}
+    
+if (msg.listResponseMessage?.description) {
+return msg.listResponseMessage.description
+}
+    
+// Template button reply
+if (msg.templateButtonReplyMessage?.selectedId) {
+return msg.templateButtonReplyMessage.selectedId
+}
+    
+if (msg.templateButtonReplyMessage?.selectedDisplayText) {
+return msg.templateButtonReplyMessage.selectedDisplayText
+}
+    
+// Interactive response
+if (msg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJSON) {
+try {
+const params = JSON.parse(msg.interactiveResponseMessage.nativeFlowResponseMessage.paramsJSON)
+return params.screen_0?.selected_option || JSON.stringify(params)
+} catch {
+return ""
+}
+}
+    
+// Jika ada pesan yang di-quote (context info)
+if (msg.extendedTextMessage?.contextInfo?.quotedMessage) {
+const quotedMsg = msg.extendedTextMessage.contextInfo.quotedMessage
+    
+// Rekursif cek pesan yang di-quote
+if (quotedMsg.conversation) {
+return `[Membalas] ${quotedMsg.conversation}`
+}
+    
+if (quotedMsg.extendedTextMessage?.text) {
+return `[Membalas] ${quotedMsg.extendedTextMessage.text}`
+}
+}
+
+return ""
+} catch (error) {
+console.log("Error extracting text:", error)
+return ""
+}
+}
+
 async function startBot(){
 
 // ===== LOAD SESSION =====
 if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
-
 const session = JSON.parse(
 Buffer.from(process.env.SESSION,"base64").toString()
 )
-
 fs.mkdirSync("./session",{recursive:true})
 fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
-
 console.log("SESSION LOADED")
 }
 
@@ -54,36 +145,29 @@ store.bind(sock.ev)
 
 // ===== CONNECTION =====
 sock.ev.on("connection.update",(update)=>{
-
 const { connection, lastDisconnect } = update
 
 if(connection === "close"){
-
 const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
 if(shouldReconnect){
 console.log("RECONNECTING")
 startBot()
 }
-
 }
 
 if(connection === "open"){
 console.log("BOT CONNECTED")
 }
-
 })
 
 // save session
 sock.ev.on("creds.update", saveCreds)
 
-
 // ===== MESSAGE EVENT =====
 sock.ev.on("messages.upsert", async (m)=>{
 
 try{
-
 const msg = m.messages[0]
 
 if(!msg.message) return
@@ -93,61 +177,44 @@ const from = msg.key.remoteJid
 const sender = msg.key.participant || msg.key.remoteJid
 const fromMe = msg.key.fromMe
 
-// ===== PERBAIKAN: AMBIL TEXT DENGAN LEBIH LENGKAP =====
-const type = getContentType(msg.message)
-let text = ""
+// AMBIL TEXT MENGGUNAKAN FUNGSI BARU
+const text = getMessageText(msg)
 
-if (type === "conversation") {
-text = msg.message.conversation
-} else if (type === "extendedTextMessage") {
-text = msg.message.extendedTextMessage.text
-} else if (type === "imageMessage") {
-text = msg.message.imageMessage.caption || ""
-} else if (type === "videoMessage") {
-text = msg.message.videoMessage.caption || ""
-} else if (type === "documentMessage") {
-text = msg.message.documentMessage.caption || ""
-} else if (type === "buttonsResponseMessage") {
-text = msg.message.buttonsResponseMessage.selectedDisplayText || ""
-} else if (type === "listResponseMessage") {
-text = msg.message.listResponseMessage.singleSelectReply?.selectedRowId || ""
-}
+// Log lengkap untuk debugging
+console.log("===== DETAIL PESAN =====")
+console.log("FROM:", from)
+console.log("SENDER:", sender)
+console.log("TEXT:", text || "(KOSONG)")
+console.log("TIPE PESAN:", Object.keys(msg.message)[0])
+console.log("DARI BOT:", fromMe)
+console.log("=======================")
 
-// Cek apakah ada quoted message (pesan yang dibalas)
-if (!text && msg.message.extendedTextMessage?.contextInfo?.quotedMessage) {
-const quotedType = getContentType(msg.message.extendedTextMessage.contextInfo.quotedMessage)
-if (quotedType === "conversation") {
-text = msg.message.extendedTextMessage.contextInfo.quotedMessage.conversation
-}
-}
-
+// Skip jika tidak ada teks (tapi tetap log untuk debugging)
 if(!text) {
-console.log("PESAN NON-TEKS (mungkin media/sticker)")
+console.log("PESAN NON-TEKS (dilewati)")
 return
 }
-
-console.log("PESAN DARI:", from)
-console.log("SENDER:", sender)
-console.log("TEXT:", text)
-console.log("TIPE:", type)
 
 // read message
 await sock.readMessages([msg.key])
 
-// ===== COMMAND =====
+// ===== COMMAND (case insensitive) =====
+const cmd = text.toLowerCase().trim()
 
 // ping
-if(text.toLowerCase() === "ping"){
+if(cmd === "ping"){
 await sock.sendMessage(from,{ text:"pong" })
+console.log("RESPON: pong dikirim ke", from)
 }
 
 // test
-if(text.toLowerCase() === "test"){
+if(cmd === "test"){
 await sock.sendMessage(from,{ text:"bot aktif" })
+console.log("RESPON: bot aktif dikirim ke", from)
 }
 
 // menu
-if(text.toLowerCase() === "menu"){
+if(cmd === "menu"){
 await sock.sendMessage(from,{
 text:`🤖 MENU BOT
 
@@ -155,7 +222,15 @@ ping - Cek bot
 menu - Tampilkan menu
 test - Test bot
 !idgrup - Lihat ID grup (khusus grup)
-!say [pesan] - Bot akan mengulang pesan`
+!halo - Sapaan`
+})
+console.log("RESPON: menu dikirim ke", from)
+}
+
+// halo
+if(cmd === "!halo"){
+await sock.sendMessage(from,{
+text:`Halo juga! 👋\nKamu: ${sender.split("@")[0]}`
 })
 }
 
@@ -179,19 +254,12 @@ text:"❌ Hanya admin bot"
 await sock.sendMessage(from,{
 text:`ID Grup:\n${from}`
 })
-
-}
-
-// Contoh command tambahan untuk test di grup
-if(text.startsWith("!say ")){
-const pesan = text.slice(5)
-await sock.sendMessage(from, { text: `Kamu bilang: ${pesan}` })
+console.log("RESPON: ID grup dikirim ke", from)
 }
 
 }catch(err){
-console.log("ERROR:",err)
+console.log("ERROR DETAIL:", err)
 }
-
 })
 
 }
