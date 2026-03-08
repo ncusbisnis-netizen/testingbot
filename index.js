@@ -11,14 +11,11 @@ makeInMemoryStore
 const P = require("pino")
 const fs = require("fs")
 
-// ===== OWNER =====
-const OWNER = ["6281234567890@s.whatsapp.net"] // ganti nomor kamu
+const OWNER = ["6281234567890@s.whatsapp.net"]
 
 const store = makeInMemoryStore({
 logger: P().child({ level: "silent", stream: "store" })
 })
-
-const startTime = new Date()
 
 async function startBot(){
 
@@ -32,6 +29,7 @@ fs.mkdirSync("./session",{recursive:true})
 fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
 
 console.log("SESSION LOADED")
+
 }
 
 const { state, saveCreds } = await useMultiFileAuthState("session")
@@ -41,7 +39,7 @@ const sock = makeWASocket({
 version,
 auth: state,
 printQRInTerminal:false,
-browser:["PremiumBot","Chrome","1.0"],
+browser:["Bot","Chrome","1.0"],
 markOnlineOnConnect:true,
 logger:P({level:"silent"})
 })
@@ -58,14 +56,19 @@ const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
 if(shouldReconnect){
+
 console.log("RECONNECTING")
+
 startBot()
+
 }
 
 }
 
 if(connection === "open"){
+
 console.log("BOT CONNECTED")
+
 }
 
 })
@@ -77,6 +80,7 @@ sock.ev.on("messages.upsert", async ({ messages })=>{
 try{
 
 const msg = messages[0]
+
 if(!msg.message) return
 if(msg.key.remoteJid === "status@broadcast") return
 
@@ -84,65 +88,48 @@ const from = msg.key.remoteJid
 const sender = msg.key.participant || msg.key.remoteJid
 const isGroup = from.endsWith("@g.us")
 
-let text = ""
+let body = ""
 
 if(msg.message.conversation){
-text = msg.message.conversation
+body = msg.message.conversation
 }
-
 else if(msg.message.extendedTextMessage){
-text = msg.message.extendedTextMessage.text
+body = msg.message.extendedTextMessage.text
 }
-
 else if(msg.message.ephemeralMessage){
-text = msg.message.ephemeralMessage.message?.extendedTextMessage?.text || ""
+body = msg.message.ephemeralMessage.message?.extendedTextMessage?.text || ""
 }
 
-text = text.toLowerCase()
+if(!body) return
+
+body = body.toLowerCase()
+
+console.log("PESAN:", body)
 
 await sock.readMessages([msg.key])
 
-// ===== MENU =====
+// ===== COMMAND =====
 
-if(text === "menu"){
+if(body === "ping"){
+
+await sock.sendMessage(from,{ text:"pong 🏓" })
+
+}
+
+if(body === "menu"){
 
 await sock.sendMessage(from,{
-text:`🤖 *PREMIUM BOT MENU*
+text:`🤖 MENU BOT
 
 ping
-runtime
+menu
 !idgrup
-!tagall
-!hidetag
-!kick
-!add
-!promote
-!demote`
+!tagall`
 })
 
 }
 
-// ===== PING =====
-
-if(text === "ping"){
-await sock.sendMessage(from,{ text:"pong 🏓" })
-}
-
-// ===== RUNTIME =====
-
-if(text === "runtime"){
-
-const uptime = process.uptime()
-
-await sock.sendMessage(from,{
-text:`⏱ Runtime : ${Math.floor(uptime)} seconds`
-})
-
-}
-
-// ===== ID GRUP =====
-
-if(text === "!idgrup"){
+if(body === "!idgrup"){
 
 if(!isGroup){
 return sock.sendMessage(from,{text:"❌ hanya di grup"})
@@ -154,9 +141,7 @@ text:`ID Grup:\n${from}`
 
 }
 
-// ===== TAG ALL =====
-
-if(text === "!tagall"){
+if(body === "!tagall"){
 
 if(!isGroup) return
 
@@ -177,94 +162,9 @@ mentions:members
 
 }
 
-// ===== HIDETAG =====
-
-if(text === "!hidetag"){
-
-if(!isGroup) return
-
-const group = await sock.groupMetadata(from)
-
-let members = group.participants.map(p=>p.id)
-
-await sock.sendMessage(from,{
-text:"📢 Pesan dari admin",
-mentions:members
-})
-
-}
-
-// ===== KICK =====
-
-if(text.startsWith("!kick")){
-
-if(!isGroup) return
-
-const group = await sock.groupMetadata(from)
-
-const isAdmin = group.participants.find(
-p=>p.id === sender && p.admin
-)
-
-if(!isAdmin) return
-
-const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid
-
-if(!mentioned) return
-
-await sock.groupParticipantsUpdate(from, mentioned, "remove")
-
-}
-
-// ===== ADD =====
-
-if(text.startsWith("!add")){
-
-if(!isGroup) return
-
-const number = text.split(" ")[1]
-
-if(!number) return
-
-await sock.groupParticipantsUpdate(
-from,
-[number+"@s.whatsapp.net"],
-"add"
-)
-
-}
-
-// ===== PROMOTE =====
-
-if(text === "!promote"){
-
-if(!isGroup) return
-
-const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid
-
-if(!mentioned) return
-
-await sock.groupParticipantsUpdate(from, mentioned, "promote")
-
-}
-
-// ===== DEMOTE =====
-
-if(text === "!demote"){
-
-if(!isGroup) return
-
-const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid
-
-if(!mentioned) return
-
-await sock.groupParticipantsUpdate(from, mentioned, "demote")
-
-}
-
 }catch(err){
 
-console.log(err)
+console.log("ERROR:",err)
 
 }
 
