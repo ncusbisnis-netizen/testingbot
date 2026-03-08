@@ -3,29 +3,25 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 async function start(){
 
 const { state, saveCreds } = await useMultiFileAuthState("session")
-
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
 version,
-auth: state,
-printQRInTerminal: true
+auth: state
 })
 
-sock.ev.on("creds.update", saveCreds)
+sock.ev.on("connection.update", (update) => {
 
-sock.ev.on("messages.upsert", async ({ messages }) => {
+const { qr } = update
 
-const msg = messages[0]
-if(!msg.message) return
-
-const text = msg.message.conversation || msg.message.extendedTextMessage?.text
-
-if(text === "ping"){
-await sock.sendMessage(msg.key.remoteJid,{ text:"pong 🟢"})
+if(qr){
+console.log("SCAN QR INI:")
+console.log(qr)
 }
 
 })
+
+sock.ev.on("creds.update", saveCreds)
 
 }
 
