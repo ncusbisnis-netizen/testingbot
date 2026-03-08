@@ -12,7 +12,7 @@ const P = require("pino")
 const fs = require("fs")
 
 // ADMIN BOT
-const OWNER = ["6281234567890@s.whatsapp.net"] // ganti nomor kamu
+const OWNER = ["6283133199990@s.whatsapp.net"] // ganti nomor kamu
 
 const store = makeInMemoryStore({
 logger: P().child({ level: "silent", stream: "store" })
