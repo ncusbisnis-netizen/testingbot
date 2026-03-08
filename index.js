@@ -32,10 +32,16 @@ version,
 auth: state,
 syncFullHistory:false,
 markOnlineOnConnect:false,
-browser:["Heroku Bot","Chrome","1.0"]
+browser:["Heroku Bot","Chrome","1.0"],
+logger:{
+info(){},
+error(){},
+warn(){},
+debug(){}
+}
 })
 
-// CONNECTION UPDATE
+// CONNECTION
 sock.ev.on("connection.update",(update)=>{
 
 const { connection, lastDisconnect } = update
@@ -45,17 +51,14 @@ if(connection === "close"){
 const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
-console.log("Connection closed")
-
 if(shouldReconnect){
-console.log("Reconnecting...")
 startBot()
 }
 
 }
 
 if(connection === "open"){
-console.log("BOT CONNECTED ✅")
+console.log("BOT CONNECTED")
 }
 
 })
@@ -63,18 +66,14 @@ console.log("BOT CONNECTED ✅")
 // SAVE SESSION
 sock.ev.on("creds.update", saveCreds)
 
-// MESSAGE HANDLER
+// MESSAGE
 sock.ev.on("messages.upsert", async ({ messages }) => {
-
-try{
 
 const msg = messages[0]
 
 if(!msg.message) return
 if(msg.key.fromMe) return
 if(msg.key.remoteJid === "status@broadcast") return
-
-// IGNORE GROUP (fix decrypt spam)
 if(msg.key.remoteJid.endsWith("@g.us")) return
 
 const from = msg.key.remoteJid
@@ -86,43 +85,16 @@ msg.message.extendedTextMessage?.text ||
 
 if(!text) return
 
-console.log("MESSAGE:", text)
-
-// COMMAND PING
 if(text === "ping"){
-
-await sock.sendMessage(from,{
-text:"pong 🟢 bot aktif"
-})
-
+await sock.sendMessage(from,{text:"pong"})
 }
 
-// COMMAND MENU
 if(text === "menu"){
-
-await sock.sendMessage(from,{
-text:`🤖 BOT HEROKU AKTIF
-
-menu
-ping
-test`
-})
-
+await sock.sendMessage(from,{text:"menu\nping\ntest"})
 }
 
-// COMMAND TEST
 if(text === "test"){
-
-await sock.sendMessage(from,{
-text:"bot berjalan normal ✅"
-})
-
-}
-
-}catch(err){
-
-console.log("ERROR:",err)
-
+await sock.sendMessage(from,{text:"bot aktif"})
 }
 
 })
