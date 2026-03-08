@@ -1,8 +1,9 @@
 {
   "name": "wa-bot-heroku",
   "version": "1.0.0",
-  "description": "WhatsApp bot Heroku + Baileys",
+  "description": "WhatsApp bot with Baileys on Heroku",
   "main": "index.js",
+  "type": "module",
   "engines": {
     "node": "18.x",
     "npm": "10.x"
@@ -11,12 +12,8 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "4.0.13",
-    "qrcode-terminal": "^0.12.0",
-    "axios": "^1.6.1",
-    "express": "^4.18.2",
-    "node-fetch": "^3.3.2"
-  },
-  "author": "NcUs",
-  "license": "MIT"
+    "@whiskeysockets/baileys": "6.7.19",
+    "pino": "^8.14.1",
+    "qrcode-terminal": "^0.12.0"
+  }
 }
