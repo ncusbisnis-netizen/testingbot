@@ -1,18 +1,16 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Bot menggunakan Baileys v6",
-  "main": "index.js",
+  "description": "Bot WhatsApp menggunakan Baileys ESM",
   "type": "module",
   "engines": {
-    "node": "20.x",
-    "npm": "10.x"
+    "node": "20.x"
   },
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.5.6",
-    "pino": "^8.14.1"
+    "@whiskeysockets/baileys": "^6.9.3",
+    "pino": "^8.18.0"
   }
 }
