@@ -1,13 +1,11 @@
 {
-  "name": "whatsapp-bot",
+  "name": "bot",
   "version": "1.0.0",
-  "description": "WhatsApp Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.19",
-    "pino": "^8.17.2"
+    "@whiskeysockets/baileys": "6.7.19"
   }
 }
