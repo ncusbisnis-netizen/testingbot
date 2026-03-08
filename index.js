@@ -2,7 +2,7 @@ global.crypto = require("crypto");
 
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
+  useSingleFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
   makeInMemoryStore
@@ -11,11 +11,21 @@ const {
 const P = require("pino");
 const fs = require("fs");
 
-const OWNER = ["6281234567890@s.whatsapp.net"]; // Ganti dengan nomor owner
+const AUTH_FILE = "./session/auth.json";
 
-const store = makeInMemoryStore({
-  logger: P().child({ level: "silent", stream: "store" })
-});
+// Load session dari environment variable SESSION (jika ada)
+if (process.env.SESSION && !fs.existsSync(AUTH_FILE)) {
+  try {
+    const sessionData = Buffer.from(process.env.SESSION, "base64").toString();
+    if (!fs.existsSync("./session")) fs.mkdirSync("./session");
+    fs.writeFileSync(AUTH_FILE, sessionData);
+    console.log("✅ Session loaded from SESSION env");
+  } catch (err) {
+    console.error("❌ Gagal load session:", err);
+  }
+}
+
+const store = makeInMemoryStore({ logger: P().child({ level: "silent" }) });
 
 function extractTextFromMessage(message) {
   if (!message) return '';
@@ -31,20 +41,7 @@ function extractTextFromMessage(message) {
 }
 
 async function startBot() {
-  if (process.env.SESSION && !fs.existsSync("./session/creds.json")) {
-    try {
-      const session = JSON.parse(
-        Buffer.from(process.env.SESSION, "base64").toString()
-      );
-      fs.mkdirSync("./session", { recursive: true });
-      fs.writeFileSync("./session/creds.json", JSON.stringify(session, null, 2));
-      console.log("✅ SESSION LOADED FROM ENV");
-    } catch (err) {
-      console.error("❌ Gagal memuat session dari env:", err);
-    }
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState("session");
+  const { state, saveCreds } = useSingleFileAuthState(AUTH_FILE);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
@@ -61,24 +58,22 @@ async function startBot() {
   let botNumber;
 
   sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      console.log("📲 Scan QR ini dengan WhatsApp Anda:");
-      console.log(qr);
-    }
+    const { connection, lastDisconnect } = update;
+
     if (connection === "close") {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       if (shouldReconnect) {
-        console.log("🔄 Koneksi terputus, mencoba reconnect...");
+        console.log("🔄 Reconnecting...");
         startBot();
       }
     }
+
     if (connection === "open") {
-      console.log("✅ BOT CONNECTED");
+      console.log("✅ BOT CONNECTED! Session exists and working");
       if (sock.user && sock.user.id) {
         botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-        console.log("🤖 Nomor bot:", botNumber);
+        console.log("🤖 Bot number:", botNumber);
       }
     }
   });
@@ -103,20 +98,27 @@ async function startBot() {
       const body = rawText.toLowerCase();
       console.log(`📩 Pesan dari ${sender} di ${from}: ${body}`);
 
-      // Tandai telah dibaca (jika gagal, tetap lanjut)
       try {
         await sock.readMessages([msg.key]);
-      } catch (readErr) {
-        console.log("⚠️ Gagal menandai baca:", readErr.message);
-      }
+      } catch (readErr) {}
 
-      // Normalisasi perintah
       let command = body;
       if (command.startsWith('!')) command = command.slice(1);
 
-      // ========== PERINTAH PING ==========
+      // ========== PING ==========
       if (command === "ping") {
         console.log("⚡ Menjalankan perintah ping, mengirim ke:", from);
+        
+        // 🟢🟢🟢 FIX: Trigger session dengan kirim ke diri sendiri 🟢🟢🟢
+        if (botNumber) {
+          try {
+            await sock.sendMessage(botNumber, { text: "." });
+            console.log("✅ Session trigger terkirim");
+          } catch (e) {
+            console.log("⚠️ Trigger session gagal, tapi lanjut");
+          }
+        }
+        
         try {
           await sock.sendMessage(from, { text: "pong 🏓" });
           console.log("✅ Pesan pong terkirim ke", from);
@@ -125,32 +127,31 @@ async function startBot() {
         }
       }
 
-      // ========== PERINTAH MENU ==========
+      // ========== MENU ==========
       if (command === "menu") {
-        console.log("📋 Menjalankan perintah menu");
         try {
           await sock.sendMessage(from, {
-            text: `🤖 *MENU BOT*\n\n• ping\n• menu\n• idgrup\n• tagall\n\nGunakan dengan atau tanpa awalan '!'`
+            text: `🤖 *MENU BOT*\n\n• ping\n• menu\n• idgrup\n• tagall`
           });
         } catch (sendErr) {
-          console.error("❌ Gagal mengirim menu:", sendErr);
+          console.error("❌ Gagal kirim menu:", sendErr);
         }
       }
 
-      // ========== PERINTAH ID GRUP ==========
+      // ========== ID GRUP ==========
       if (command === "idgrup") {
         if (!isGroup) {
-          await sock.sendMessage(from, { text: "❌ Perintah ini hanya bisa digunakan di grup." });
+          await sock.sendMessage(from, { text: "❌ Hanya di grup" });
           return;
         }
         try {
           await sock.sendMessage(from, { text: `📌 *ID Grup:*\n\`${from}\`` });
         } catch (sendErr) {
-          console.error("❌ Gagal mengirim idgrup:", sendErr);
+          console.error("❌ Gagal kirim idgrup:", sendErr);
         }
       }
 
-      // ========== PERINTAH TAGALL ==========
+      // ========== TAGALL ==========
       if (command === "tagall") {
         if (!isGroup) return;
         try {
@@ -160,23 +161,17 @@ async function startBot() {
           for (let m of members) {
             teks += "@" + m.split("@")[0] + "\n";
           }
-          await sock.sendMessage(from, {
-            text: teks,
-            mentions: members
-          });
-          console.log("✅ Tagall terkirim ke", from);
+          await sock.sendMessage(from, { text: teks, mentions: members });
+          console.log("✅ Tagall terkirim");
         } catch (err) {
-          console.error("❌ Gagal tagall:", err);
-          await sock.sendMessage(from, { text: "❌ Gagal melakukan tagall." }).catch(e => {});
+          console.error("❌ Tagall error:", err);
         }
       }
 
     } catch (err) {
-      console.error("❌ Error di handler pesan:", err);
+      console.error("❌ Handler error:", err);
     }
   });
 }
 
-startBot().catch(err => {
-  console.error("❌ Fatal error:", err);
-});
+startBot().catch(console.error);
