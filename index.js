@@ -1,12 +1,18 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
+const { default: makeWASocket, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys")
 
-async function startBot() {
+async function startBot(){
 
-const { state, saveCreds } = await useMultiFileAuthState("session")
+const session = JSON.parse(Buffer.from(process.env.SESSION,"base64").toString())
+
+const { state, saveCreds } = await require("@whiskeysockets/baileys").useMultiFileAuthState('./session')
+
+Object.assign(state.creds, session)
+
+const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
-auth: state,
-printQRInTerminal: true
+version,
+auth: state
 })
 
 sock.ev.on("creds.update", saveCreds)
@@ -14,17 +20,18 @@ sock.ev.on("creds.update", saveCreds)
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
 const msg = messages[0]
-if (!msg.message) return
+if(!msg.message) return
 
-const sender = msg.key.remoteJid
 const text =
 msg.message.conversation ||
 msg.message.extendedTextMessage?.text
 
-if (!text) return
+if(text === "ping"){
 
-if (text === "ping") {
-await sock.sendMessage(sender, { text: "pong" })
+await sock.sendMessage(msg.key.remoteJid,{
+text:"pong 🟢 bot aktif"
+})
+
 }
 
 })
