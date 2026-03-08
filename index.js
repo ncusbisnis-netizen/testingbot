@@ -1,97 +1,56 @@
 const {
 default: makeWASocket,
 useMultiFileAuthState,
-fetchLatestBaileysVersion,
-DisconnectReason
+fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
 const fs = require("fs")
 
-async function startBot(){
+async function start(){
 
-// convert SESSION env ke creds.json
-if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
-const session = JSON.parse(
-Buffer.from(process.env.SESSION,"base64").toString()
-)
+const { state, saveCreds } = await useMultiFileAuthState("./session")
 
-fs.mkdirSync("./session",{recursive:true})
-fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
-}
-
-const { state, saveCreds } = await useMultiFileAuthState("session")
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
 version,
 auth: state,
-syncFullHistory: false,
-browser: ["Heroku Bot","Chrome","1.0"]
+browser: ["Session Generator","Chrome","1.0"]
 })
 
-// auto reconnect
-sock.ev.on("connection.update",(update)=>{
-const { connection, lastDisconnect } = update
+sock.ev.on("connection.update", async(update)=>{
 
-if(connection === "close"){
-
-const shouldReconnect =
-lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
-if(shouldReconnect){
-console.log("reconnecting...")
-startBot()
-}
-
-}
+const { connection } = update
 
 if(connection === "open"){
-console.log("BOT CONNECTED ✅")
+
+console.log("LOGIN BERHASIL")
+
+const session = fs.readFileSync("./session/creds.json")
+
+const base64 = Buffer.from(session).toString("base64")
+
+console.log("SESSION ANDA:")
+console.log(base64)
+
 }
 
 })
 
-// save session
 sock.ev.on("creds.update", saveCreds)
 
-// message handler
-sock.ev.on("messages.upsert", async ({ messages }) => {
+// pairing code
+if(!sock.authState.creds.registered){
 
-const msg = messages[0]
-if(!msg.message) return
+const number = process.env.NUMBER
 
-const from = msg.key.remoteJid
+const code = await sock.requestPairingCode(number)
 
-const text =
-msg.message.conversation ||
-msg.message.extendedTextMessage?.text
-
-if(!text) return
-
-// command ping
-if(text === "ping"){
-
-await sock.sendMessage(from,{
-text:"pong 🟢 bot aktif"
-})
+console.log("PAIRING CODE:")
+console.log(code)
 
 }
 
-// command test
-if(text === "menu"){
-
-await sock.sendMessage(from,{
-text:`BOT HEROKU AKTIF
-
-menu
-ping
-test`
-})
-
 }
 
-})
-
-}
-
-startBot()
+start()
