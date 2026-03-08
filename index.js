@@ -1,21 +1,20 @@
 // index.js
-import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, useSingleFileAuthState } from '@whiskeysockets/baileys'
+import makeWASocket, { fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys'
 import { readFileSync, writeFileSync } from 'fs'
-import P from 'pino'
 
 const SESSION_FILE = './session.json'
 
-// Load session dari file
+// Load session
 let session = {}
 try {
-    const data = readFileSync(SESSION_FILE, { encoding: 'utf-8' })
+    const data = readFileSync(SESSION_FILE, 'utf-8')
     session = JSON.parse(data)
     console.log('[INFO] Session loaded from file.')
 } catch (err) {
-    console.log('[INFO] No existing session, will create a new one.')
+    console.log('[INFO] No session found, starting fresh.')
 }
 
-// Buat socket
+// Start socket
 async function startSock() {
     const { version } = await fetchLatestBaileysVersion()
     const sock = makeWASocket({
@@ -24,14 +23,14 @@ async function startSock() {
         auth: session
     })
 
-    // Simpan session tiap kali update
+    // Save session on update
     sock.ev.on('creds.update', (creds) => {
         session = { ...session, ...creds }
         writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2))
         console.log('[INFO] Session updated.')
     })
 
-    // Event ketika terhubung
+    // Connection events
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update
         if (connection === 'close') {
@@ -46,15 +45,15 @@ async function startSock() {
         }
     })
 
-    // Event message
+    // Message event
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0]
         if (!msg.message || msg.key.fromMe) return
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text
-
         if (!text) return
         console.log(`[MESSAGE] From ${msg.key.remoteJid}: ${text}`)
 
+        // Simple command
         if (text === '!ping') {
             await sock.sendMessage(msg.key.remoteJid, { text: 'Pong!' })
         }
