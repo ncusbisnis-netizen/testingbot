@@ -11,7 +11,7 @@ const fs = require("fs")
 
 async function startBot(){
 
-// ambil SESSION dari Heroku
+// LOAD SESSION
 if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
 
 const session = JSON.parse(
@@ -21,7 +21,7 @@ Buffer.from(process.env.SESSION,"base64").toString()
 fs.mkdirSync("./session",{recursive:true})
 fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
 
-console.log("SESSION loaded")
+console.log("SESSION LOADED")
 }
 
 const { state, saveCreds } = await useMultiFileAuthState("session")
@@ -35,7 +35,7 @@ markOnlineOnConnect:false,
 browser:["Heroku Bot","Chrome","1.0"]
 })
 
-// connection update
+// CONNECTION UPDATE
 sock.ev.on("connection.update",(update)=>{
 
 const { connection, lastDisconnect } = update
@@ -60,10 +60,10 @@ console.log("BOT CONNECTED ✅")
 
 })
 
-// save session
+// SAVE SESSION
 sock.ev.on("creds.update", saveCreds)
 
-// message handler
+// MESSAGE HANDLER
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
 try{
@@ -73,6 +73,8 @@ const msg = messages[0]
 if(!msg.message) return
 if(msg.key.fromMe) return
 if(msg.key.remoteJid === "status@broadcast") return
+
+// IGNORE GROUP (fix decrypt spam)
 if(msg.key.remoteJid.endsWith("@g.us")) return
 
 const from = msg.key.remoteJid
@@ -84,10 +86,9 @@ msg.message.extendedTextMessage?.text ||
 
 if(!text) return
 
-console.log("Message:",text)
+console.log("MESSAGE:", text)
 
-// COMMAND
-
+// COMMAND PING
 if(text === "ping"){
 
 await sock.sendMessage(from,{
@@ -96,6 +97,7 @@ text:"pong 🟢 bot aktif"
 
 }
 
+// COMMAND MENU
 if(text === "menu"){
 
 await sock.sendMessage(from,{
@@ -108,6 +110,7 @@ test`
 
 }
 
+// COMMAND TEST
 if(text === "test"){
 
 await sock.sendMessage(from,{
@@ -117,7 +120,9 @@ text:"bot berjalan normal ✅"
 }
 
 }catch(err){
+
 console.log("ERROR:",err)
+
 }
 
 })
