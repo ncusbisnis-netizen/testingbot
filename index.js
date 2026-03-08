@@ -7,20 +7,19 @@ fetchLatestBaileysVersion,
 DisconnectReason
 } = require("@whiskeysockets/baileys")
 
+const P = require("pino")
 const fs = require("fs")
 
 async function startBot(){
 
-// LOAD SESSION
+// load session dari ENV
 if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
-
 const session = JSON.parse(
 Buffer.from(process.env.SESSION,"base64").toString()
 )
 
 fs.mkdirSync("./session",{recursive:true})
 fs.writeFileSync("./session/creds.json",JSON.stringify(session,null,2))
-
 console.log("SESSION LOADED")
 }
 
@@ -33,15 +32,10 @@ auth: state,
 syncFullHistory:false,
 markOnlineOnConnect:false,
 browser:["Heroku Bot","Chrome","1.0"],
-logger:{
-info(){},
-error(){},
-warn(){},
-debug(){}
-}
+logger: P({ level: "silent" })
 })
 
-// CONNECTION
+// connection
 sock.ev.on("connection.update",(update)=>{
 
 const { connection, lastDisconnect } = update
@@ -52,6 +46,7 @@ const shouldReconnect =
 lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
 if(shouldReconnect){
+console.log("RECONNECTING")
 startBot()
 }
 
@@ -63,10 +58,10 @@ console.log("BOT CONNECTED")
 
 })
 
-// SAVE SESSION
+// save session
 sock.ev.on("creds.update", saveCreds)
 
-// MESSAGE
+// message handler
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
 const msg = messages[0]
