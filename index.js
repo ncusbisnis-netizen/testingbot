@@ -70,7 +70,7 @@ async function startBot() {
     }
 
     if (connection === "open") {
-      console.log("✅ BOT CONNECTED! Session exists and working");
+      console.log("✅ BOT CONNECTED!");
       if (sock.user && sock.user.id) {
         botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
         console.log("🤖 Bot number:", botNumber);
@@ -98,80 +98,57 @@ async function startBot() {
       const body = rawText.toLowerCase();
       console.log(`📩 Pesan dari ${sender} di ${from}: ${body}`);
 
-      try {
-        await sock.readMessages([msg.key]);
-      } catch (readErr) {}
+      await sock.readMessages([msg.key]).catch(() => {});
 
       let command = body;
       if (command.startsWith('!')) command = command.slice(1);
 
-      // ========== PING ==========
+      // ===== PING =====
       if (command === "ping") {
-        console.log("⚡ Menjalankan perintah ping, mengirim ke:", from);
+        console.log("⚡ Mengirim pong ke", from);
         
-        // 🟢🟢🟢 FIX: Trigger session dengan kirim ke diri sendiri 🟢🟢🟢
+        // Trigger session dengan kirim ke diri sendiri
         if (botNumber) {
-          try {
-            await sock.sendMessage(botNumber, { text: "." });
-            console.log("✅ Session trigger terkirim");
-          } catch (e) {
-            console.log("⚠️ Trigger session gagal, tapi lanjut");
-          }
+          await sock.sendMessage(botNumber, { text: "." }).catch(() => {});
         }
         
-        try {
-          await sock.sendMessage(from, { text: "pong 🏓" });
-          console.log("✅ Pesan pong terkirim ke", from);
-        } catch (sendErr) {
-          console.error("❌ Gagal mengirim pong:", sendErr);
-        }
+        await sock.sendMessage(from, { text: "pong 🏓" });
+        console.log("✅ Pong terkirim");
       }
 
-      // ========== MENU ==========
+      // ===== MENU =====
       if (command === "menu") {
-        try {
-          await sock.sendMessage(from, {
-            text: `🤖 *MENU BOT*\n\n• ping\n• menu\n• idgrup\n• tagall`
-          });
-        } catch (sendErr) {
-          console.error("❌ Gagal kirim menu:", sendErr);
-        }
+        await sock.sendMessage(from, {
+          text: `🤖 *MENU BOT*\n\n• ping\n• menu\n• idgrup\n• tagall`
+        });
       }
 
-      // ========== ID GRUP ==========
+      // ===== ID GRUP =====
       if (command === "idgrup") {
         if (!isGroup) {
           await sock.sendMessage(from, { text: "❌ Hanya di grup" });
           return;
         }
-        try {
-          await sock.sendMessage(from, { text: `📌 *ID Grup:*\n\`${from}\`` });
-        } catch (sendErr) {
-          console.error("❌ Gagal kirim idgrup:", sendErr);
-        }
+        await sock.sendMessage(from, { text: `📌 *ID Grup:*\n\`${from}\`` });
       }
 
-      // ========== TAGALL ==========
+      // ===== TAGALL =====
       if (command === "tagall") {
         if (!isGroup) return;
-        try {
-          const group = await sock.groupMetadata(from);
-          const members = group.participants.map(p => p.id);
-          let teks = "📢 *TAG ALL*\n\n";
-          for (let m of members) {
-            teks += "@" + m.split("@")[0] + "\n";
-          }
-          await sock.sendMessage(from, { text: teks, mentions: members });
-          console.log("✅ Tagall terkirim");
-        } catch (err) {
-          console.error("❌ Tagall error:", err);
+        const group = await sock.groupMetadata(from);
+        const members = group.participants.map(p => p.id);
+        let teks = "📢 *TAG ALL*\n\n";
+        for (let m of members) {
+          teks += "@" + m.split("@")[0] + "\n";
         }
+        await sock.sendMessage(from, { text: teks, mentions: members });
+        console.log("✅ Tagall terkirim");
       }
 
     } catch (err) {
-      console.error("❌ Handler error:", err);
+      console.error("❌ Error:", err);
     }
   });
 }
 
-startBot().catch(console.error);
+startBot();
