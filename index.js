@@ -11,16 +11,19 @@ makeInMemoryStore
 const P = require("pino")
 const fs = require("fs")
 
-// ADMIN BOT
-const OWNER = ["6283133199990@s.whatsapp.net"] // ganti nomor kamu
+// ===== ADMIN BOT =====
+const OWNER = [
+"6281234567890@s.whatsapp.net" // ganti nomor kamu
+]
 
+// store message
 const store = makeInMemoryStore({
 logger: P().child({ level: "silent", stream: "store" })
 })
 
 async function startBot(){
 
-// LOAD SESSION
+// ===== LOAD SESSION =====
 if(process.env.SESSION && !fs.existsSync("./session/creds.json")){
 
 const session = JSON.parse(
@@ -43,12 +46,12 @@ printQRInTerminal:false,
 markOnlineOnConnect:true,
 syncFullHistory:false,
 browser:["Heroku Bot","Chrome","1.0"],
-logger: P({ level:"silent" })
+logger:P({level:"silent"})
 })
 
 store.bind(sock.ev)
 
-// CONNECTION
+// ===== CONNECTION =====
 sock.ev.on("connection.update",(update)=>{
 
 const { connection, lastDisconnect } = update
@@ -71,42 +74,54 @@ console.log("BOT CONNECTED")
 
 })
 
-// SAVE SESSION
+// save session
 sock.ev.on("creds.update", saveCreds)
 
-// MESSAGE HANDLER
-sock.ev.on("messages.upsert", async ({ messages }) => {
+
+// ===== MESSAGE EVENT =====
+sock.ev.on("messages.upsert", async (m)=>{
 
 try{
 
-const msg = messages[0]
+const msg = m.messages[0]
 
 if(!msg.message) return
-if(msg.key.fromMe) return
 if(msg.key.remoteJid === "status@broadcast") return
 
 const from = msg.key.remoteJid
 const sender = msg.key.participant || msg.key.remoteJid
+const fromMe = msg.key.fromMe
 
-// READ MESSAGE (biar langsung centang 2)
-await sock.readMessages([msg.key])
-
+// ===== AMBIL TEXT =====
 const text =
 msg.message.conversation ||
 msg.message.extendedTextMessage?.text ||
+msg.message.imageMessage?.caption ||
 ""
 
 if(!text) return
 
-// PING
+console.log("PESAN:", text)
+
+// read message
+await sock.readMessages([msg.key])
+
+// ===== COMMAND =====
+
+// ping
 if(text === "ping"){
-await sock.sendMessage(from,{text:"pong"})
+await sock.sendMessage(from,{ text:"pong" })
 }
 
-// MENU
+// test
+if(text === "test"){
+await sock.sendMessage(from,{ text:"bot aktif" })
+}
+
+// menu
 if(text === "menu"){
 await sock.sendMessage(from,{
-text:`MENU BOT
+text:`🤖 MENU BOT
 
 ping
 menu
@@ -115,23 +130,20 @@ test
 })
 }
 
-// TEST
-if(text === "test"){
-await sock.sendMessage(from,{text:"bot aktif"})
-}
+// ===== ID GRUP =====
+if(text.startsWith("!idgrup")){
 
-// ID GRUP
-if(text === "!idgrup"){
-
+// harus di grup
 if(!from.endsWith("@g.us")){
 return sock.sendMessage(from,{
-text:"❌ Command hanya bisa dipakai di grup"
+text:"❌ Command hanya bisa di grup"
 })
 }
 
-if(!OWNER.includes(sender)){
+// hanya owner atau bot
+if(!OWNER.includes(sender) && !fromMe){
 return sock.sendMessage(from,{
-text:"❌ Hanya admin bot yang bisa memakai command ini"
+text:"❌ Hanya admin bot"
 })
 }
 
@@ -141,8 +153,8 @@ text:`ID Grup:\n${from}`
 
 }
 
-}catch(e){
-console.log("ERROR:",e)
+}catch(err){
+console.log("ERROR:",err)
 }
 
 })
