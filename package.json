@@ -1,15 +1,12 @@
 {
-  "name": "whatsapp-bot",
+  "name": "bot-wa-abid",
   "version": "1.0.0",
+  "description": "Simple WhatsApp Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.5.0",
-    "pino": "^8.17.2"
-  },
-  "engines": {
-    "node": "18.x"
+    "@whiskeysockets/baileys": "7.0.0-rc.9"
   }
 }
