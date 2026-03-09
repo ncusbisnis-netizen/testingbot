@@ -2,9 +2,9 @@
   "name": "bot-wa-kanjut",
   "version": "1.0.0",
   "description": "Simple WhatsApp Bot",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node app"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc.9",
